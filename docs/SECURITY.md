@@ -17,16 +17,16 @@ Pham vi:
 
 ## Assets
 
-| Asset | Severity | Notes |
-|---|---|---|
-| Tai khoan chu tro/quan ly | Critical | Mat tai khoan co the mat toan bo du lieu va lich su tai chinh. |
-| Du lieu nguoi thue | Critical | Ho ten, SDT, dia chi, CCCD, ngay cap, noi cap. |
-| Anh CCCD/giay to | Critical | Rui ro rieng tu cao, can private storage. |
-| Hoa don, thanh toan, cong no | Critical | Sai lech gay thiet hai tai chinh. |
-| Audit log | High | Can cho doi soat va dieu tra. |
-| Secrets/env vars | Critical | Lo secret co the chiem DB/storage/session. |
-| Backup | Critical | Ban sao day du cua du lieu nhay cam. |
-| Logs van hanh | High | Co the vo tinh chua PII/token/idempotency key. |
+| Asset                        | Severity | Notes                                                          |
+| ---------------------------- | -------- | -------------------------------------------------------------- |
+| Tai khoan chu tro/quan ly    | Critical | Mat tai khoan co the mat toan bo du lieu va lich su tai chinh. |
+| Du lieu nguoi thue           | Critical | Ho ten, SDT, dia chi, CCCD, ngay cap, noi cap.                 |
+| Anh CCCD/giay to             | Critical | Rui ro rieng tu cao, can private storage.                      |
+| Hoa don, thanh toan, cong no | Critical | Sai lech gay thiet hai tai chinh.                              |
+| Audit log                    | High     | Can cho doi soat va dieu tra.                                  |
+| Secrets/env vars             | Critical | Lo secret co the chiem DB/storage/session.                     |
+| Backup                       | Critical | Ban sao day du cua du lieu nhay cam.                           |
+| Logs van hanh                | High     | Co the vo tinh chua PII/token/idempotency key.                 |
 
 ## Trust boundaries
 

@@ -18,18 +18,21 @@ Xây dựng website có khả năng bảo trì, kiểm thử, bảo mật và tr
 ## 3. Quy trình bắt buộc
 
 Trước khi sửa code:
+
 - Đọc task và tài liệu liên quan.
 - Xác nhận phạm vi file được phép sửa.
 - Kiểm tra phụ thuộc với task khác.
 - Viết kế hoạch ngắn trong task.
 
 Trong khi sửa:
+
 - Giữ thay đổi nhỏ, tập trung.
 - Không refactor ngoài phạm vi nếu không cần thiết.
 - Cập nhật test cùng thay đổi hành vi.
 - Ghi quyết định kiến trúc đáng kể vào `docs/decisions/`.
 
 Trước khi hoàn thành:
+
 - Chạy lint, typecheck và test liên quan.
 - Tự review diff.
 - Cập nhật trạng thái task và tài liệu.
@@ -59,6 +62,7 @@ Trước khi hoàn thành:
 ## 6. Definition of Done
 
 Một task chỉ hoàn thành khi:
+
 - Acceptance criteria đạt.
 - Test phù hợp được thêm/cập nhật và chạy thành công.
 - Không còn lỗi lint/typecheck liên quan.
@@ -69,6 +73,7 @@ Một task chỉ hoàn thành khi:
 ## 7. Giao tiếp giữa agent
 
 Mỗi handoff phải gồm:
+
 - Đã làm gì.
 - File đã thay đổi.
 - Cách kiểm tra.

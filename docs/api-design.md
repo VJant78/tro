@@ -14,7 +14,7 @@
 - `rooms`: tao, sua, xem, loc, doi trang thai, ngung su dung.
 - `tenants`: tao, sua, tim kiem, xem lich su.
 - `tenancies`: tao lan thue, them/xoa nguoi o, chuyen phong, ket thuc thue.
-- `pricing-configs`: gia mac dinh, gia rieng phong, gia rieng tenancy.
+- `pricing-configs`: mot global config cho dien/nuoc/phi trong UI; API resolver van giu scope system/property/room/tenancy cho invoice snapshot ve sau.
 - `utility-readings`: ghi/sua/finalize chi so dien nuoc.
 - `invoices`: tao nhap, phat hanh, khoa, huy, xem item, tinh lai khi duoc phep.
 - `payments`: ghi nhan, phan bo, huy/hoan tac, idempotency.
@@ -24,6 +24,41 @@
 - `audit-logs`: tra cuu log theo entity/action/user/time.
 - `jobs`: endpoint noi bo/admin de trigger job tao hoa don dien nuoc neu can.
 
+## Phase 3 implemented contracts
+
+### Rooms
+
+- `GET /api/v1/rooms`: protected list, envelope `{ data, page }`, supports `limit`, `cursor`, `sort`, `q`, `filter[status]`, `filter[groupId]`; each room includes `currentOccupancy` summary when occupied.
+- `POST /api/v1/rooms`: owner/manager/staff create. Room code is trimmed and uppercased. Active code conflict returns `409`.
+- `GET /api/v1/rooms/:id`: protected detail with active representative/co-tenant occupants. Soft-deleted rooms return `404`.
+- `PATCH /api/v1/rooms/:id`: owner/manager/staff partial update.
+- `DELETE /api/v1/rooms/:id`: owner/manager retire/soft delete; sets status `INACTIVE` and preserves history.
+
+### Tenants and Tenancies
+
+- `GET /api/v1/tenants`: protected list, envelope `{ data, page }`, supports `limit`, `cursor`, `q`, `filter[status]`, `filter[roomId]`; each tenant includes current room and role if active.
+- `POST /api/v1/tenants`: owner/manager/staff create tenant profile.
+- `GET /api/v1/tenants/:id`: protected detail with tenancy history.
+- `PATCH /api/v1/tenants/:id`: owner/manager/staff partial update.
+- `DELETE /api/v1/tenants/:id`: owner/manager retire/soft delete tenant profile.
+- `GET /api/v1/tenancies`: protected tenancy list, optional `tenantId`; tenant-specific history returns membership role and member list.
+- `POST /api/v1/tenancies`: assign tenant to room. If room has no active tenancy, creates tenancy and marks that tenant as representative using room rent/deposit defaults. If room already has active tenancy, adds tenant as co-tenant member.
+- `PATCH /api/v1/tenancies/:id/end`: end the whole tenancy group, close active members and mark room vacant.
+- `POST /api/v1/tenancies/:id/transfer`: move the whole active group to target room, preserve representative/co-tenant roles, set new start date and write transfer handover record.
+- `POST /api/v1/tenancies/:id/members/:tenantId/transfer`: move one active member to another room. If target room is empty, the moved member becomes representative; if target room is occupied, the moved member becomes co-tenant. Representatives cannot move alone while co-tenants remain.
+- `PATCH /api/v1/tenancies/:id/members/:tenantId/leave`: close one active membership. Co-tenants can leave independently. Representatives cannot leave while co-tenants remain. If the leaving member is the last occupant, the tenancy ends and the room becomes vacant.
+
+### Pricing Configs
+
+- `GET /api/v1/pricing-configs`: protected list of pricing configs.
+- `GET /api/v1/pricing-configs/effective?propertyId=&roomId=&tenancyId=&asOf=`: protected resolver returning `resolvedConfig` and `sources`.
+- `GET /api/v1/pricing-configs/global`: protected single active system config used by Settings UI.
+- `PATCH /api/v1/pricing-configs/global`: owner/manager update the single global utility/fee config. Rent is intentionally not accepted here; room rent is managed on Rooms.
+- `POST /api/v1/pricing-configs`: owner/manager create config; validates scope target and non-negative money.
+- `PATCH /api/v1/pricing-configs/:id`: owner/manager update config.
+- `DELETE /api/v1/pricing-configs/:id`: owner/manager deactivate config.
+- Priority: invoice snapshot, tenancy, room, property, system. Phase 4 P4-001 implements resolver priority; invoice snapshot application is enforced when invoice module lands.
+
 ## Validation
 
 - Validate body, query param va path param server-side.
@@ -32,7 +67,9 @@
 - Discount khong duoc lam tong invoice nho hon 0.
 - Chi so moi khong nho hon chi so cu, tru workflow thay dong ho/quay vong.
 - Mot phong khong co hai tenancy active trong MVP.
-- Mot tenant khong co hai tenancy active.
+- Mot tenant khong co hai active room membership.
+- Them nguoi vao phong da co tenancy active khong tao tenancy moi; nguoi them sau la co-tenant.
+- Dai dien khong duoc roi/chuyen rieng neu tenancy con nguoi o chung; can flow doi dai dien rieng.
 - Khong sua truc tiep invoice da khoa/da paid neu khong tao adjustment.
 - Khong thanh toan vuot outstanding neu MVP chua ho tro tien du.
 

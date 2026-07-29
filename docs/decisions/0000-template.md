@@ -5,7 +5,11 @@
 - Owners: Lead + relevant agent
 
 ## Context
+
 ## Decision
+
 ## Alternatives considered
+
 ## Consequences
+
 ## Rollback plan

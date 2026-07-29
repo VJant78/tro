@@ -1,1 +1,8 @@
-{"recommendations":["openai.chatgpt","dbaeumer.vscode-eslint","esbenp.prettier-vscode","editorconfig.editorconfig"]}
+{
+  "recommendations": [
+    "openai.chatgpt",
+    "dbaeumer.vscode-eslint",
+    "esbenp.prettier-vscode",
+    "editorconfig.editorconfig"
+  ]
+}

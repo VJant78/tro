@@ -29,26 +29,26 @@ Dam bao nghiep vu tai chinh cot loi co the kiem thu truoc khi code:
 
 ## Required PaymentPeriodCalculator cases
 
-| ID | Case | Expected |
-|---|---|---|
-| PPC-001 | Daily, start `2026-08-01`, cycles 1 | `2026-08-02 00:00` |
-| PPC-002 | Daily, current `2026-08-02`, cycles 10 | `2026-08-12 00:00` |
-| PPC-003 | Weekly, start `2026-08-01`, cycles 1 | `2026-08-08 00:00` |
-| PPC-004 | Weekly, current `2026-08-08`, cycles 4 | `2026-09-05 00:00` |
-| PPC-005 | Monthly anchor 15 | Next month day 15 |
-| PPC-006 | Monthly anchor 28 | February day 28 |
-| PPC-007 | Monthly anchor 29 non-leap | `2026-02-28` |
-| PPC-008 | Monthly anchor 29 leap | `2028-02-29` |
-| PPC-009 | Monthly anchor 30 | February last day |
-| PPC-010 | Monthly anchor 31 | February last day |
-| PPC-011 | Anchor 31 recovery | `2026-02-28` then `2026-03-31` |
-| PPC-012 | Anchor 31 sequence | `31/01`, `28/02`, `31/03`, `30/04`, `31/05` |
-| PPC-013 | Prepay 12 months from `2026-01-31` | `2027-01-31` |
-| PPC-014 | Partial payment | `paidUntil` unchanged |
-| PPC-015 | Same idempotency key twice | One payment, one `paidUntil` update |
-| PPC-016 | Cancel latest payment | Recalculate from valid records |
-| PPC-017 | Invalid cycles 0/negative/decimal | Validation error |
-| PPC-018 | Timezone boundary | Local midnight preserved |
+| ID      | Case                                   | Expected                                    |
+| ------- | -------------------------------------- | ------------------------------------------- |
+| PPC-001 | Daily, start `2026-08-01`, cycles 1    | `2026-08-02 00:00`                          |
+| PPC-002 | Daily, current `2026-08-02`, cycles 10 | `2026-08-12 00:00`                          |
+| PPC-003 | Weekly, start `2026-08-01`, cycles 1   | `2026-08-08 00:00`                          |
+| PPC-004 | Weekly, current `2026-08-08`, cycles 4 | `2026-09-05 00:00`                          |
+| PPC-005 | Monthly anchor 15                      | Next month day 15                           |
+| PPC-006 | Monthly anchor 28                      | February day 28                             |
+| PPC-007 | Monthly anchor 29 non-leap             | `2026-02-28`                                |
+| PPC-008 | Monthly anchor 29 leap                 | `2028-02-29`                                |
+| PPC-009 | Monthly anchor 30                      | February last day                           |
+| PPC-010 | Monthly anchor 31                      | February last day                           |
+| PPC-011 | Anchor 31 recovery                     | `2026-02-28` then `2026-03-31`              |
+| PPC-012 | Anchor 31 sequence                     | `31/01`, `28/02`, `31/03`, `30/04`, `31/05` |
+| PPC-013 | Prepay 12 months from `2026-01-31`     | `2027-01-31`                                |
+| PPC-014 | Partial payment                        | `paidUntil` unchanged                       |
+| PPC-015 | Same idempotency key twice             | One payment, one `paidUntil` update         |
+| PPC-016 | Cancel latest payment                  | Recalculate from valid records              |
+| PPC-017 | Invalid cycles 0/negative/decimal      | Validation error                            |
+| PPC-018 | Timezone boundary                      | Local midnight preserved                    |
 
 ## Utility invoice cron
 

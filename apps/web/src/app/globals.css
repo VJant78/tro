@@ -1,0 +1,500 @@
+:root {
+  color-scheme: light;
+  --background: #f7f7f4;
+  --surface: #ffffff;
+  --surface-muted: #eef3f0;
+  --text: #1f2421;
+  --muted: #5f6b65;
+  --border: #d8ded8;
+  --primary: #176b5b;
+  --primary-contrast: #ffffff;
+  --danger: #b42318;
+  --warning: #9a6700;
+  --success: #146c2e;
+}
+
+* {
+  box-sizing: border-box;
+}
+
+body {
+  margin: 0;
+  background: var(--background);
+  color: var(--text);
+  font-family:
+    Arial,
+    system-ui,
+    -apple-system,
+    BlinkMacSystemFont,
+    "Segoe UI",
+    sans-serif;
+}
+
+a {
+  color: inherit;
+}
+
+.app-shell {
+  min-height: 100vh;
+  display: grid;
+  grid-template-columns: 260px 1fr;
+}
+
+.sidebar {
+  background: #153b35;
+  color: #f6fffb;
+  padding: 24px;
+}
+
+.sidebar-title {
+  font-size: 20px;
+  font-weight: 700;
+  margin-bottom: 24px;
+}
+
+.sidebar nav {
+  display: grid;
+  gap: 8px;
+}
+
+.sidebar a {
+  border-radius: 6px;
+  color: #d9ede8;
+  padding: 10px 12px;
+  text-decoration: none;
+}
+
+.sidebar a[aria-current="page"],
+.sidebar a:hover {
+  background: #235a50;
+  color: #ffffff;
+}
+
+.main {
+  min-width: 0;
+}
+
+.topbar {
+  align-items: center;
+  background: var(--surface);
+  border-bottom: 1px solid var(--border);
+  display: flex;
+  justify-content: space-between;
+  min-height: 64px;
+  padding: 0 24px;
+}
+
+.content {
+  padding: 24px;
+}
+
+.metric-grid {
+  display: grid;
+  gap: 16px;
+  grid-template-columns: repeat(4, minmax(0, 1fr));
+}
+
+.metric {
+  background: var(--surface);
+  border: 1px solid var(--border);
+  border-radius: 8px;
+  padding: 16px;
+}
+
+.metric-label {
+  color: var(--muted);
+  font-size: 14px;
+}
+
+.metric-value {
+  font-size: 28px;
+  font-weight: 700;
+  margin-top: 8px;
+}
+
+.panel {
+  background: var(--surface);
+  border: 1px solid var(--border);
+  border-radius: 8px;
+  margin-top: 20px;
+  padding: 18px;
+}
+
+.rooms-layout {
+  display: grid;
+  gap: 20px;
+  grid-template-columns: minmax(320px, 0.9fr) minmax(360px, 1.1fr);
+}
+
+.tenants-layout {
+  display: grid;
+  gap: 20px;
+  grid-template-columns: minmax(320px, 0.85fr) minmax(420px, 1.15fr);
+}
+
+.pricing-layout {
+  display: grid;
+  gap: 20px;
+  grid-template-columns: minmax(360px, 1fr) minmax(420px, 1fr);
+}
+
+.pricing-stack {
+  display: grid;
+  gap: 12px;
+}
+
+.pricing-grid {
+  display: grid;
+  gap: 10px;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+}
+
+.pricing-cell {
+  border: 1px solid var(--border);
+  border-radius: 8px;
+  display: grid;
+  gap: 8px;
+  padding: 12px;
+}
+
+.pricing-cell small {
+  color: var(--muted);
+}
+
+.tenants-toolbar {
+  grid-template-columns: minmax(0, 1fr) auto minmax(170px, 0.6fr) auto;
+}
+
+.tenancy-panel {
+  border-top: 1px solid var(--border);
+  margin-top: 22px;
+  padding-top: 18px;
+}
+
+.tenancy-actions {
+  align-items: end;
+  display: grid;
+  gap: 12px;
+  grid-template-columns: auto minmax(220px, 1fr) repeat(4, auto);
+  margin-top: 16px;
+}
+
+.current-tenancy-card {
+  background: var(--surface-muted);
+  border: 1px solid var(--border);
+  border-radius: 8px;
+  display: grid;
+  gap: 12px;
+  padding: 12px;
+}
+
+.current-tenancy-summary,
+.member-row {
+  align-items: center;
+  border: 1px solid var(--border);
+  border-radius: 8px;
+  display: flex;
+  gap: 12px;
+  justify-content: space-between;
+  padding: 10px 12px;
+}
+
+.tenant-facts {
+  display: grid;
+  gap: 10px;
+  grid-template-columns: repeat(3, minmax(0, 1fr));
+}
+
+.tenant-facts span {
+  background: var(--surface);
+  border: 1px solid var(--border);
+  border-radius: 8px;
+  display: grid;
+  gap: 4px;
+  padding: 10px;
+}
+
+.tenant-facts small {
+  color: var(--muted);
+}
+
+.tenant-member-list,
+.tenancy-history {
+  display: grid;
+  gap: 10px;
+  margin-top: 12px;
+}
+
+.member-row small {
+  color: var(--muted);
+  display: block;
+  margin-top: 4px;
+}
+
+.occupancy-panel {
+  background: var(--surface-muted);
+  border: 1px solid var(--border);
+  border-radius: 8px;
+  padding: 14px;
+}
+
+.section-heading.compact h3 {
+  margin: 0;
+}
+
+.rooms-list,
+.room-detail {
+  background: var(--surface);
+  border: 1px solid var(--border);
+  border-radius: 8px;
+  padding: 18px;
+}
+
+.section-heading {
+  align-items: center;
+  display: flex;
+  gap: 16px;
+  justify-content: space-between;
+}
+
+.section-heading h1,
+.section-heading h2 {
+  margin: 0;
+}
+
+.section-heading p {
+  color: var(--muted);
+  margin: 4px 0 0;
+}
+
+.toolbar {
+  display: grid;
+  gap: 10px;
+  grid-template-columns: minmax(0, 1fr) 150px auto;
+  margin: 18px 0;
+}
+
+.toolbar input,
+.toolbar select,
+.field select,
+.field textarea {
+  border: 1px solid var(--border);
+  border-radius: 6px;
+  font: inherit;
+  min-height: 42px;
+  padding: 10px 12px;
+}
+
+.room-list-stack {
+  display: grid;
+  gap: 10px;
+}
+
+.room-row {
+  align-items: center;
+  background: var(--surface);
+  border: 1px solid var(--border);
+  border-radius: 8px;
+  color: inherit;
+  cursor: pointer;
+  display: flex;
+  font: inherit;
+  justify-content: space-between;
+  min-height: 70px;
+  padding: 12px;
+  text-align: left;
+}
+
+.room-row[data-active="true"],
+.room-row:hover {
+  border-color: var(--primary);
+  box-shadow: 0 0 0 2px #d5eee8;
+}
+
+.room-row small {
+  color: var(--muted);
+  display: block;
+  margin-top: 4px;
+}
+
+.skeleton-row {
+  animation: pulse 1.2s ease-in-out infinite;
+  background: linear-gradient(90deg, #eef3f0, #f8faf8, #eef3f0);
+  border-radius: 8px;
+  height: 70px;
+}
+
+.empty-state,
+.notice {
+  align-items: center;
+  background: var(--surface-muted);
+  border: 1px solid var(--border);
+  border-radius: 8px;
+  display: flex;
+  gap: 12px;
+  justify-content: space-between;
+  padding: 14px;
+}
+
+.notice.error {
+  background: #fff1f0;
+  border-color: #f4b6b0;
+  color: var(--danger);
+  margin: 12px 0;
+}
+
+.notice.warning {
+  background: #fff8e8;
+  border-color: #f5d083;
+  color: var(--warning);
+}
+
+.room-form {
+  display: grid;
+  gap: 14px;
+  margin-top: 18px;
+}
+
+.form-grid {
+  display: grid;
+  gap: 14px;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+}
+
+.field textarea {
+  min-height: 96px;
+  resize: vertical;
+}
+
+.field-error {
+  color: var(--danger);
+}
+
+.form-actions {
+  display: flex;
+  justify-content: flex-end;
+}
+
+.login-shell {
+  align-items: center;
+  display: grid;
+  min-height: 100vh;
+  padding: 24px;
+}
+
+.login-panel {
+  background: var(--surface);
+  border: 1px solid var(--border);
+  border-radius: 8px;
+  margin: 0 auto;
+  max-width: 420px;
+  padding: 24px;
+  width: 100%;
+}
+
+.field {
+  display: grid;
+  gap: 6px;
+  margin-top: 14px;
+}
+
+.field input {
+  border: 1px solid var(--border);
+  border-radius: 6px;
+  font: inherit;
+  padding: 11px 12px;
+}
+
+.ui-button {
+  border: 0;
+  border-radius: 6px;
+  cursor: pointer;
+  font: inherit;
+  font-weight: 700;
+  min-height: 42px;
+  padding: 10px 14px;
+}
+
+.ui-button-primary {
+  background: var(--primary);
+  color: var(--primary-contrast);
+}
+
+.ui-button-secondary {
+  background: var(--surface-muted);
+  color: var(--text);
+}
+
+.ui-button-danger {
+  background: var(--danger);
+  color: #ffffff;
+}
+
+.ui-status {
+  border-radius: 999px;
+  display: inline-flex;
+  font-size: 13px;
+  font-weight: 700;
+  padding: 4px 8px;
+}
+
+.ui-status-neutral {
+  background: #eef3f0;
+  color: #3b4540;
+}
+
+.ui-status-success {
+  background: #e7f6ea;
+  color: var(--success);
+}
+
+.ui-status-warning {
+  background: #fff4d6;
+  color: var(--warning);
+}
+
+.ui-status-danger {
+  background: #fde8e6;
+  color: var(--danger);
+}
+
+@media (max-width: 780px) {
+  .app-shell {
+    grid-template-columns: 1fr;
+  }
+
+  .sidebar {
+    padding: 16px;
+  }
+
+  .sidebar nav {
+    display: flex;
+    gap: 8px;
+    overflow-x: auto;
+  }
+
+  .metric-grid {
+    grid-template-columns: 1fr;
+  }
+
+  .rooms-layout,
+  .tenants-layout,
+  .pricing-layout,
+  .toolbar,
+  .form-grid,
+  .tenant-facts,
+  .tenancy-actions {
+    grid-template-columns: 1fr;
+  }
+}
+
+@keyframes pulse {
+  0%,
+  100% {
+    opacity: 0.65;
+  }
+
+  50% {
+    opacity: 1;
+  }
+}

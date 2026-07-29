@@ -4,12 +4,6 @@
 
 ## Backlog
 
-- [ ] P3-001 | Phase 3 | Rooms module API + database integration | Agent: Backend + Database | Dependency: Phase 2, P2-005, P2-006 | Scope: `apps/api/**`, `packages/database/**` | AC: CRUD room, unique active room code, soft delete/retire, filters | Verify: `npm run check`, API integration tests | Risk: High
-- [ ] P3-002 | Phase 3 | Rooms UI | Agent: Frontend | Dependency: P3-001 API contract | Scope: `apps/web/**`, `packages/ui/**` | AC: list/create/edit/detail, loading/empty/error, responsive | Verify: `npm run check`, E2E/manual smoke | Risk: Medium
-- [ ] P3-003 | Phase 3 | Tenants and tenancies API | Agent: Backend + Database | Dependency: Phase 2 | Scope: `apps/api/**`, `packages/database/**` | AC: tenant CRUD, one active tenancy per room/tenant, transfer history | Verify: `npm run check`, integration tests | Risk: High
-- [ ] P3-004 | Phase 3 | Tenants and tenancies UI | Agent: Frontend | Dependency: P3-003 | Scope: `apps/web/**`, `packages/ui/**` | AC: tenant list/detail/form, tenancy create/end/transfer flow | Verify: `npm run check`, E2E/manual smoke | Risk: Medium
-- [ ] P4-001 | Phase 4 | Pricing configuration | Agent: Backend + Database + Frontend | Dependency: Phase 3 | Scope: split by Lead before start | AC: system/room/tenancy pricing priority | Verify: `npm run check`, integration tests | Risk: High
-- [ ] P4-002 | Phase 4 | Utility readings | Agent: Backend + Database + Frontend | Dependency: P4-001 | Scope: split by Lead before start | AC: reading validation, one finalized reading per room/period, audit | Verify: `npm run check`, integration/E2E | Risk: High
 - [ ] P4-003 | Phase 4 | Monthly utility invoice job | Agent: Backend + Database + QA | Dependency: P4-002 | Scope: `apps/api/**`, `packages/database/**`, `tests/**` | AC: idempotent job, unique invoice source key, batch result | Verify: `npm run check`, cron integration tests | Risk: High
 - [ ] P5-001 | Phase 5 | Invoice module | Agent: Backend + Database + Frontend | Dependency: Phase 3, P4-001 | Scope: split by Lead before start | AC: invoice/items/status/snapshot price/no negative total | Verify: `npm run check`, integration/E2E | Risk: High
 - [ ] P5-002 | Phase 5 | Payment + allocation + idempotency | Agent: Backend + Database + QA + Security | Dependency: P5-001 | Scope: split by Lead before start | AC: payment record, partial payment, duplicate prevention, rollback | Verify: `npm run check`, payment integration tests | Risk: Critical
@@ -20,25 +14,15 @@
 
 ## Ready
 
-- [ ] P2-001 | Phase 2 | ADR chot stack va quyet dinh Phase 2 | Agent: Architecture | Dependency: Phase 1 accepted | Scope: `docs/decisions/**`, `docs/ARCHITECTURE.md`, `docs/api-design.md` | AC: ADR co context, decision, alternatives, consequences, rollback | Verify: manual Lead review | Risk: Medium
-- [ ] P2-002 | Phase 2 | Workspace tooling baseline | Agent: DevOps | Dependency: P2-001 | Scope: root config, `packages/config/**`, `package.json` | AC: lint/typecheck/test/build khong con la echo-only cho package da implement, format check duoc dinh nghia | Verify: `npm install`, `npm run check`, `npm run build` | Risk: Medium
-- [ ] P2-003 | Phase 2 | Database foundation | Agent: Database | Dependency: P2-001 | Scope: `packages/database/**` | AC: Prisma schema initial, migration, seed dev, money/date conventions, raw SQL notes for partial indexes | Verify: prisma validate/migrate/seed, `npm run check` | Risk: High
-- [ ] P2-004 | Phase 2 | API foundation | Agent: Backend | Dependency: P2-001, P2-002 | Scope: `apps/api/**` | AC: API framework boots, health endpoint, error format, validation boundary, config loading | Verify: API build/test/start smoke, `npm run check` | Risk: High
-- [ ] P2-005 | Phase 2 | Web foundation | Agent: Frontend | Dependency: P2-001, P2-002 | Scope: `apps/web/**`, `packages/ui/**` | AC: web framework boots, app shell, login placeholder, responsive layout skeleton, accessibility baseline | Verify: web build/start smoke, `npm run check` | Risk: Medium
-- [ ] P2-006 | Phase 2 | Auth/session/RBAC skeleton | Agent: Backend + Security review | Dependency: P2-003, P2-004 | Scope: `apps/api/**`, maybe `packages/database/**` only via Database handoff | AC: owner login/session, server-side auth guard, deny by default, future role model | Verify: auth integration tests, 401/403 tests, `npm run check` | Risk: Critical
-- [ ] P2-007 | Phase 2 | Observability and audit-log foundation | Agent: Backend + DevOps + Security review | Dependency: P2-003, P2-004 | Scope: `apps/api/**`, `docs/SECURITY.md`, `docs/deployment.md` | AC: requestId, structured redacted logs, audit log write helper/interface | Verify: unit/integration tests, manual log review | Risk: High
-- [ ] P2-008 | Phase 2 | Phase 2 QA harness | Agent: QA | Dependency: P2-002, P2-004, P2-005 | Scope: `tests/**`, test config files assigned by Lead | AC: unit/integration/E2E harness ready, at least health/auth smoke tests | Verify: `npm run check`, E2E smoke command | Risk: Medium
+- [ ] P4-002 | Phase 4 | Utility readings | Agent: Backend + Database + Frontend | Dependency: P4-001 | Scope: split by Lead before start | AC: reading validation, one finalized reading per room/period, audit | Verify: `npm run check`, integration/E2E | Risk: High
 
 ## In Progress
 
-- Chua co. Khong tu dong bat dau Phase 2 cho den khi chu du an phe duyet.
+- Chua co. Lead duoc phep tu dong tiep tuc phase ke tiep theo yeu cau moi cua chu du an.
 
 ## Blocked
 
-- [ ] B-001 | Phase 2 | Git diff/history review | Agent: Lead | Dependency: repository must be initialized as Git repo | Scope: `.git` external state | AC: Lead can review diff/history before integration | Verify: `git status --short`, `git log --oneline -5` | Risk: Medium
-- [ ] B-002 | Phase 2 | Format check | Agent: DevOps | Dependency: P2-002 | Scope: root tooling config | AC: format command exists and runs in CI | Verify: `npm run format:check` | Risk: Low
 - [ ] B-003 | Phase 2 | Docker validation | Agent: DevOps | Dependency: P2-002, Docker installed/available | Scope: Docker files | AC: local compose can start API/web/db | Verify: `docker compose up` smoke | Risk: Medium
-- [ ] B-004 | Phase 2 | Database migration/seed validation | Agent: Database | Dependency: P2-003 | Scope: `packages/database/**` | AC: migration and seed exist and pass | Verify: prisma migrate/seed commands | Risk: High
 
 ## Review
 
@@ -54,36 +38,64 @@
 
 ## Done
 
+- [x] P4-001 | Phase 4 | Pricing configuration | Agent: Backend + Database + Frontend + Architecture + QA | Scope: `packages/database/**`, `apps/api/**`, `apps/web/**`, `tests/**`, docs | AC: system/property/room/tenancy pricing priority, effective resolver, validation, audit, UI | Verify: `npm run check`, API tests, web tests/build, PostgreSQL Pricing smoke passed | Risk: High
+- [x] UX-FIX-001 | Phase 4 | Occupancy, tenant role/filter, group transfer and global settings refinement | Agent: Lead + Backend + Frontend + Database + QA/BA | Scope: `apps/api/**`, `apps/web/**`, `packages/database/**`, docs, tests | AC: rooms show representative/start/co-tenant count and detail occupants; tenants filter by room and show representative/co-tenant role; assignment auto-selects representative/co-tenant without rent/deposit form fields; transfer moves whole group; settings uses one global utility/fee config without room rent | Verify: `npm run check`, `npm run build`, `npm run test:e2e`, `npm run audit`, PostgreSQL occupancy/transfer/global settings smoke passed | Risk: High
+- [x] UX-FIX-002 | Phase 4 | Tenant detail occupancy actions | Agent: Lead + Backend + Frontend + QA | Scope: `apps/api/**`, `apps/web/**`, docs, tests | AC: newly created active tenant shows not-in-room until membership exists; tenant detail shows current room, joined date, role and active co-occupants; individual member transfer and leave actions exist; whole-room transfer remains separate; representative individual transfer/leave is blocked while co-tenants remain | Verify: API/web focused tests, `npm run check`, build/E2E/audit, PostgreSQL individual member smoke | Risk: High
+- [x] P3-001 | Phase 3 | Rooms module API + database integration | Agent: Backend + Database + QA | Scope: `apps/api/**`, `packages/database/**`, `tests/**` | AC: CRUD room, unique active room code, soft delete/retire, filters | Verify: `npm run check`, `npm run test:e2e`, PostgreSQL Rooms smoke passed | Risk: High
+- [x] P3-002 | Phase 3 | Rooms UI | Agent: Frontend + QA | Scope: `apps/web/**`, `packages/ui/**` | AC: list/create/edit/detail, loading/empty/error, responsive | Verify: `npm run check`, web tests/build | Risk: Medium
+- [x] P3-003 | Phase 3 | Tenants and tenancies API | Agent: Backend + Database + QA | Scope: `apps/api/**`, `packages/database/**`, `tests/**` | AC: tenant CRUD, one active tenancy per room/tenant, transfer history | Verify: `npm run check`, PostgreSQL Tenants smoke passed | Risk: High
+- [x] P3-004 | Phase 3 | Tenants and tenancies UI | Agent: Frontend + QA | Scope: `apps/web/**`, `packages/ui/**` | AC: tenant list/detail/form, tenancy create/end/transfer flow | Verify: `npm run check`, web tests/build | Risk: Medium
+- [x] P2-001 | Phase 2 | ADR chot stack va quyet dinh Phase 2 | Agent: Architecture | Scope: `docs/decisions/**`, `docs/ARCHITECTURE.md`, `docs/api-design.md` | Verify: manual Lead review, `npm run check` | Risk: Medium
+- [x] P2-002 | Phase 2 | Workspace tooling baseline | Agent: DevOps | Scope: root config, `packages/config/**`, `package.json` | Verify: `npm install`, `npm run check`, `npm run build` | Risk: Medium
+- [x] P2-003 | Phase 2 | Database foundation | Agent: Database | Scope: `packages/database/**` | Verify: prisma validate/generate/migrate/seed, `npm run check` | Risk: High
+- [x] P2-004 | Phase 2 | API foundation | Agent: Backend | Scope: `apps/api/**` | Verify: API build/test/start smoke, `npm run check` | Risk: High
+- [x] P2-005 | Phase 2 | Web foundation | Agent: Frontend | Scope: `apps/web/**`, `packages/ui/**` | Verify: web build/start smoke, `npm run check` | Risk: Medium
+- [x] P2-006 | Phase 2 | Auth/session/RBAC skeleton | Agent: Backend + Security review | Scope: `apps/api/**` | Verify: auth integration tests, 401/403 tests, `npm run check` | Risk: Critical
+- [x] P2-007 | Phase 2 | Observability and audit-log foundation | Agent: Backend + DevOps + Security review | Scope: `apps/api/**` | Verify: unit/integration tests, requestId error test | Risk: High
+- [x] P2-008 | Phase 2 | Phase 2 QA harness | Agent: QA | Scope: `tests/**`, test config files assigned by Lead | Verify: `npm run check`, E2E smoke command | Risk: Medium
+- [x] B-004 | Phase 2 | Database migration/seed runtime validation | Agent: Database | Scope: `packages/database/**` | Verify: `npm run db:migrate -w @repo/database`, `npm run db:seed -w @repo/database` passed | Risk: High
+- [x] B-001 | Phase 2 | Git diff/history review | Agent: Lead | Scope: `.git` external state | Verify: `git status --short`, `git log --oneline -5` passed | Risk: Medium
+- [x] B-002 | Phase 2 | Format check | Agent: DevOps | Scope: root tooling config | Verify: `npm run format:check` passed | Risk: Low
 - [x] REPO-001 | Phase 0 | Khoi tao multi-agent repository | Agent: Lead | Scope: repo scaffold | Verify: existing scaffold files present | Risk: Low
 
 ## Current Verification Evidence
 
-- Dependency install: `npm install --package-lock=false --ignore-scripts` passed, 0 vulnerabilities reported.
-- Dependency tree: `npm ls --depth=0` passed after install.
-- Lint: `npm run lint` passed, but workspace scripts are echo-only.
-- Typecheck: `npm run typecheck` passed, but workspace scripts are echo-only.
-- Unit test: `npm run test` passed, but workspace scripts are echo-only.
-- Combined check: `npm run check` passed, but workspace scripts are echo-only.
-- Build: `npm run build` passed, but workspace scripts are echo-only.
-- E2E: `npm run test:e2e` only echoes "Configure Playwright/Cypress in tests/e2e"; no E2E framework yet.
-- Git status/history: failed because `C:\Tmp\Tro` is not a Git repository.
-- Database migration/seed: not applicable; no real Prisma schema or migration yet.
-- Docker: not applicable; no Dockerfile/compose and Docker command is not available in current shell.
+- Dependency install: `npm install` passed and produced `package-lock.json`.
+- Security audit: `npm run audit` passed, 0 high vulnerabilities.
+- Format: `npm run format:check` passed.
+- Lint: `npm run lint` passed across implemented workspaces.
+- Typecheck: `npm run typecheck` passed across implemented workspaces.
+- Unit tests: `npm run test` passed across implemented workspaces.
+- Combined check: `npm run check` passed.
+- Build: `npm run build` passed across implemented workspaces.
+- E2E smoke: `npm run test:e2e` passed, 1 test file / 3 tests after Rooms/Tenants additions.
+- API smoke: `npm run start:smoke -w @app/api` passed.
+- Web smoke: Vite preview returned HTTP 200 for `http://127.0.0.1:4173/`; preview process stopped after smoke.
+- Prisma validate/generate: `npm run db:validate -w @repo/database` and `npm run db:generate -w @repo/database` passed.
+- Database migration artifact: `packages/database/prisma/migrations/202607290001_phase2_foundation/migration.sql` generated from Prisma schema and includes reviewed partial indexes.
+- Database migrate/seed runtime: `npm run db:migrate -w @repo/database` and `npm run db:seed -w @repo/database` passed against local PostgreSQL.
+- PostgreSQL Rooms smoke: authenticated create/list/update/retire flow passed against local DB.
+- PostgreSQL Tenants smoke: authenticated room + tenant + tenancy create/transfer/end flow passed against local DB.
+- PostgreSQL Pricing smoke: authenticated room pricing config create and effective resolver passed against local DB.
+- PostgreSQL occupancy/transfer/settings smoke: authenticated API smoke passed for representative assignment, co-tenant assignment, tenant `filter[roomId]`, room `currentOccupancy`, whole-group transfer and `pricing-configs/global`.
+- PostgreSQL individual member smoke: authenticated API smoke passed for blocking representative solo transfer while co-tenants remain, transferring one co-tenant to another room, current tenancy detail, old room occupancy and member leave.
+- Docker: `docker --version` failed because Docker command is not available in current shell.
+- Git status/history: `git status --short` and `git log --oneline -5` passed; Phase 2/3 changes are uncommitted pending owner review.
 
 ## Agent Availability
 
-| Agent | Trang thai | Task | File scope |
-|---|---|---|---|
-| Lead | Awaiting approval | Phase 2 planning | `TASKS.md`, review/integration docs |
-| Product | Review | PROJECT-001 | Product/business/story/AC docs |
-| UI/UX | Review | PROJECT-002 | `docs/ui-ux-spec.md` |
-| Architecture | Ready | P2-001 | `docs/decisions/**`, architecture/API docs |
-| Database | Ready | P2-003 after P2-001 | `packages/database/**` |
-| Backend | Ready | P2-004 after P2-001/P2-002 | `apps/api/**` |
-| Frontend | Ready | P2-005 after P2-001/P2-002 | `apps/web/**`, `packages/ui/**` |
-| QA | Ready | P2-008 after harness dependencies | `tests/**` |
-| Security | Review/Ready | P2-006/P2-007 review | `docs/SECURITY.md`, review only unless assigned |
-| DevOps | Ready | P2-002 | root config, CI/Docker/docs |
+| Agent        | Trang thai | Task                    | File scope                                      |
+| ------------ | ---------- | ----------------------- | ----------------------------------------------- |
+| Lead         | Active     | Phase 4 planning/start  | `TASKS.md`, review/integration docs             |
+| Product      | Review     | PROJECT-001             | Product/business/story/AC docs                  |
+| UI/UX        | Review     | PROJECT-002             | `docs/ui-ux-spec.md`                            |
+| Architecture | Ready      | Phase 4 decisions       | `docs/decisions/**`, architecture/API docs      |
+| Database     | Ready      | P4-001                  | `packages/database/**`                          |
+| Backend      | Ready      | P4-001                  | `apps/api/**`                                   |
+| Frontend     | Ready      | P4-001                  | `apps/web/**`, `packages/ui/**`                 |
+| QA           | Ready      | P4-001 verification     | `tests/**`                                      |
+| Security     | Ready      | Review sensitive flows  | `docs/SECURITY.md`, review only unless assigned |
+| DevOps       | Blocked    | B-003 Docker validation | Docker/CI/deployment scopes                     |
 
 ## Dependency Graph
 
@@ -106,9 +118,8 @@ Phase 1 review/acceptance
 
 ## Implementation Lock
 
-Khong bat dau code Phase 2 cho den khi chu du an phe duyet:
+Lead duoc phep tu dong tiep tuc cac phase tiep theo theo yeu cau moi cua chu du an:
 
-- Phase 1 docs duoc chap nhan.
-- Open decisions toi thieu duoc chot hoac duoc Lead ghi gia dinh an toan.
-- P2-001 ADR duoc tao dau Phase 2.
-- File ownership cho task implementation duoc xac nhan.
+- Van phai giu file ownership matrix, acceptance criteria va quality gate.
+- Neu gap loi, Lead dieu phoi agent lien quan de chon solution va fix truc tiep.
+- Chi dung khi gap external blocker khong the tu xu ly trong repo.

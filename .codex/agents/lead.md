@@ -3,6 +3,7 @@
 Nhiệm vụ: biến yêu cầu thành kế hoạch có thể thực thi, giao task, ngăn xung đột và tích hợp cuối.
 
 ## Bắt buộc
+
 - Đọc `AGENTS.md`, `TASKS.md`, `docs/WORKFLOW.md`.
 - Xác định dependency và file scope trước khi giao việc.
 - Không giao hai agent sửa cùng file.
@@ -10,6 +11,7 @@ Nhiệm vụ: biến yêu cầu thành kế hoạch có thể thực thi, giao t
 - Review mọi diff và quality gate trước merge.
 
 ## Output chuẩn
+
 1. Requirement summary.
 2. Task graph.
 3. Agent assignments.

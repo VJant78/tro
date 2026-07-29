@@ -11,9 +11,15 @@
 ## Nguoi thue va tenancy
 
 - Mot phong co the co nhieu nguoi thue.
-- Mot nguoi thue chi co mot tenancy dang hoat dong tai mot thoi diem.
+- Nguoi dau tien duoc dua vao phong trong se la nguoi dai dien.
+- Nguoi them sau vao phong dang co tenancy active la nguoi o chung.
+- Mot nguoi thue chi co mot active room membership tai mot thoi diem.
 - Mot phong chi co mot tenancy dang hoat dong tai mot thoi diem trong MVP.
-- Khi chuyen phong phai dong lich su phong cu, tao lich su phong moi va ghi audit log.
+- Khi chuyen phong phai chuyen ca nhom active sang phong moi, giu nguyen vai tro dai dien/o chung, dong lich su phong cu, tao lich su phong moi va ghi audit log.
+- Nguoi o chung co the roi phong hoac chuyen rieng sang phong khac; membership cu duoc dong bang ngay roi/chuyen.
+- Neu chuyen mot nguoi sang phong trong, nguoi do tro thanh dai dien phong moi; neu phong dich da co dai dien, nguoi do la nguoi o chung.
+- Dai dien khong duoc roi phong hoac chuyen rieng khi phong con nguoi o chung; can flow doi dai dien rieng truoc.
+- Ket thuc tenancy hien ket thuc ca nhom thue.
 - Tenancy luu gia thue tai thoi diem bat dau de khong mat lich su khi phong doi gia.
 
 ## Chu ky tien phong
@@ -26,13 +32,17 @@
 
 ## Gia dien nuoc va phi
 
+- Gia phong mac dinh duoc quan ly tai tab Phong va snapshot vao tenancy khi bat dau thue.
+- UI Cai dat chi quan ly mot global config cho gia dien, gia nuoc, rac, internet, phi dich vu, ngay chot, ngay den han, tien te va timezone.
 - Thu tu uu tien gia khi tao invoice:
   1. Gia da luu tren invoice.
   2. Gia rieng cua tenancy.
   3. Gia rieng cua phong.
-  4. Gia mac dinh he thong.
+  4. Gia rieng cua property/nha tro.
+  5. Gia mac dinh he thong.
 - Khi tao invoice, gia ap dung phai duoc snapshot vao invoice item.
 - Gia dien, gia nuoc va phi khong duoc am.
+- Cau hinh gia active khong duoc overlap effective period tren cung scope/target.
 
 ## Chi so dien nuoc
 

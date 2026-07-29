@@ -1,1 +1,26 @@
-{"name":"@app/web","version":"0.0.0","private":true,"scripts":{"dev":"echo 'Install/configure your web framework'","build":"echo 'Build web'","lint":"echo 'Lint web'","typecheck":"echo 'Typecheck web'","test":"echo 'Test web'"}}
+{
+  "name": "@app/web",
+  "version": "0.0.0",
+  "private": true,
+  "type": "module",
+  "scripts": {
+    "dev": "vite --host 0.0.0.0",
+    "build": "tsc -p tsconfig.json && vite build",
+    "lint": "prettier --check \"src/**/*.{ts,tsx,css}\"",
+    "typecheck": "tsc -p tsconfig.json --noEmit",
+    "test": "vitest run",
+    "start": "vite --host 0.0.0.0",
+    "preview": "vite preview --host 0.0.0.0"
+  },
+  "dependencies": {
+    "@repo/ui": "0.0.0",
+    "@vitejs/plugin-react": "^6.0.4",
+    "react": "^19.2.8",
+    "react-dom": "^19.2.8",
+    "vite": "^8.1.5"
+  },
+  "devDependencies": {
+    "@types/react": "^19.2.7",
+    "@types/react-dom": "^19.2.3"
+  }
+}

@@ -1,0 +1,1 @@
+export const PRICING_REPOSITORY = Symbol("PRICING_REPOSITORY");

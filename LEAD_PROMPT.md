@@ -5,6 +5,7 @@ Act as the engineering lead for this repository.
 Read `AGENTS.md`, `TASKS.md`, `docs/WORKFLOW.md`, the relevant product specification, and all role instructions under `.codex/agents/`.
 
 For the requested feature:
+
 1. Restate the goal, constraints, non-goals, and unknowns.
 2. Build a dependency graph of small independently verifiable tasks.
 3. Assign each task to the most suitable specialized agent.
