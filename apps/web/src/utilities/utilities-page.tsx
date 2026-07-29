@@ -344,7 +344,7 @@ export function UtilitiesPage() {
                 }
               />
             </label>
-            <label className="field">
+            <label className="field field-wide">
               Da tra truoc
               <input
                 inputMode="numeric"
@@ -354,6 +354,8 @@ export function UtilitiesPage() {
                 value={form.prepaidAmount}
               />
             </label>
+          </div>
+          <div className="meter-grid">
             <label className="field">
               Dien cu
               <input readOnly value={form.electricityPrevious} />

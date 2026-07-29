@@ -384,6 +384,16 @@ a {
   grid-template-columns: repeat(2, minmax(0, 1fr));
 }
 
+.field-wide {
+  grid-column: 1 / -1;
+}
+
+.meter-grid {
+  display: grid;
+  gap: 14px;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+}
+
 .field textarea {
   min-height: 96px;
   resize: vertical;
@@ -520,6 +530,7 @@ a {
   .utilities-layout,
   .toolbar,
   .form-grid,
+  .meter-grid,
   .settlement-grid,
   .tenant-facts,
   .tenancy-actions {
