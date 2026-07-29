@@ -1,0 +1,1 @@
+{"version":"2.0.0","tasks":[{"label":"Quality Check","type":"shell","command":"npm run check","group":{"kind":"test","isDefault":true},"problemMatcher":[]},{"label":"Create Task","type":"shell","command":"npm run task:new -- \"${input:taskTitle}\"","problemMatcher":[]}],"inputs":[{"id":"taskTitle","type":"promptString","description":"Task title"}]}

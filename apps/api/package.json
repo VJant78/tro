@@ -1,0 +1,1 @@
+{"name":"@app/api","version":"0.0.0","private":true,"scripts":{"dev":"echo 'Install/configure your API framework'","build":"echo 'Build API'","lint":"echo 'Lint API'","typecheck":"echo 'Typecheck API'","test":"echo 'Test API'"}}

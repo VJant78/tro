@@ -1,0 +1,1 @@
+{"name":"@app/web","version":"0.0.0","private":true,"scripts":{"dev":"echo 'Install/configure your web framework'","build":"echo 'Build web'","lint":"echo 'Lint web'","typecheck":"echo 'Typecheck web'","test":"echo 'Test web'"}}
