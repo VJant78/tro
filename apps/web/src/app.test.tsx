@@ -92,4 +92,31 @@ describe("App", () => {
     ).toBeInTheDocument();
     vi.restoreAllMocks();
   });
+
+  it("routes to utilities", async () => {
+    vi.spyOn(globalThis, "fetch").mockImplementation(async (input) => {
+      const url = String(input);
+      if (url.includes("/rooms?")) {
+        return new Response(
+          JSON.stringify({
+            data: [],
+            page: { limit: 100, nextCursor: null, hasMore: false },
+          }),
+          { status: 200, headers: { "Content-Type": "application/json" } },
+        );
+      }
+      return new Response(JSON.stringify([]), {
+        status: 200,
+        headers: { "Content-Type": "application/json" },
+      });
+    });
+
+    window.history.pushState({}, "", "/utilities");
+    render(<App />);
+
+    expect(
+      await screen.findByRole("heading", { name: "Dien nuoc" }),
+    ).toBeInTheDocument();
+    vi.restoreAllMocks();
+  });
 });

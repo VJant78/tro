@@ -27,6 +27,10 @@ Stack de xuat: PostgreSQL + Prisma. Cac constraint nang cao nhu partial unique i
 - `BillingCycleType`: `DAILY`, `WEEKLY`, `MONTHLY`.
 - `PricingScope`: `SYSTEM`, `PROPERTY`, `ROOM`, `TENANCY`.
 - `UtilityReadingStatus`: `DRAFT`, `FINALIZED`, `VOIDED`.
+- `UtilityReadingKind`: `MONTHLY`, `MOVE_OUT`.
+- `SettlementType`: `MONTHLY`, `MOVE_OUT`.
+- `SettlementStatus`: `DRAFT`, `FINALIZED`, `VOIDED`.
+- `AccountEntryType`: `PREPAYMENT`, `CREDIT_APPLIED`.
 - `InvoiceType`: `RENT`, `UTILITY`, `COMBINED`, `ADJUSTMENT`.
 - `InvoiceStatus`: `DRAFT`, `ISSUED`, `PARTIALLY_PAID`, `PAID`, `OVERDUE`, `CANCELLED`.
 - `InvoiceItemType`: `RENT`, `ELECTRICITY`, `WATER`, `TRASH`, `INTERNET`, `SERVICE`, `SURCHARGE`, `DISCOUNT`, `ADJUSTMENT`, `PREVIOUS_DEBT`.
@@ -96,6 +100,19 @@ Stack de xuat: PostgreSQL + Prisma. Cac constraint nang cao nhu partial unique i
 - Fields: `room_id`, `tenancy_id`, period fields, previous/current/usage electricity, electricity unit price/amount, previous/current/usage water, water unit price/amount, status, recorder, recorded/finalized timestamps, notes, audit fields.
 - Constraints: current reading `>=` previous reading; generated or validated usage; unique finalized reading per `(room_id, billing_period_start, billing_period_end)`.
 - Rule: editing finalized reading requires audit; locked/paid invoices need adjustment instead of direct edit.
+
+### settlements
+
+- Fields: `settlement_type`, `status`, `room_id`, `tenancy_id`, `representative_tenant_id`, optional `utility_reading_id`, inclusive period start/end, billing year/month, occupied days, days in month, rent amount snapshot, prorated rent, electricity amount, water amount, total, prepaid applied, carry-forward, outstanding, finalized timestamp, notes, audit fields.
+- Purpose: Phase 4 settlement foundation for monthly close and move-out close before the full invoice module.
+- Rule: duplicate finalized settlement for the same tenancy and period is rejected by application logic.
+- Rule: rent proration uses actual days in the month and stores the rounded VND amount.
+
+### tenant_account_entries
+
+- Fields: `tenant_id`, optional `tenancy_id`, optional `room_id`, optional `settlement_id`, `entry_type`, amount, effective date, notes, audit fields.
+- Purpose: track prepayment credit and the portion applied to rent.
+- Rule: `PREPAYMENT` increases credit balance; `CREDIT_APPLIED` decreases credit balance. Credit is applied only to rent in Phase 4.
 
 ### invoices
 

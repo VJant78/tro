@@ -138,6 +138,12 @@ a {
   grid-template-columns: minmax(360px, 1fr) minmax(420px, 1fr);
 }
 
+.utilities-layout {
+  display: grid;
+  gap: 20px;
+  grid-template-columns: minmax(340px, 0.85fr) minmax(460px, 1.15fr);
+}
+
 .pricing-stack {
   display: grid;
   gap: 12px;
@@ -311,6 +317,23 @@ a {
   box-shadow: 0 0 0 2px #d5eee8;
 }
 
+.settlement-row {
+  align-items: center;
+  border: 1px solid var(--border);
+  border-radius: 8px;
+  display: flex;
+  gap: 12px;
+  justify-content: space-between;
+  min-height: 76px;
+  padding: 12px;
+}
+
+.settlement-row small {
+  color: var(--muted);
+  display: block;
+  margin-top: 4px;
+}
+
 .room-row small {
   color: var(--muted);
   display: block;
@@ -373,6 +396,20 @@ a {
 .form-actions {
   display: flex;
   justify-content: flex-end;
+}
+
+.settlement-preview {
+  border-top: 1px solid var(--border);
+  display: grid;
+  gap: 14px;
+  margin-top: 20px;
+  padding-top: 18px;
+}
+
+.settlement-grid {
+  display: grid;
+  gap: 10px;
+  grid-template-columns: repeat(4, minmax(0, 1fr));
 }
 
 .login-shell {
@@ -480,8 +517,10 @@ a {
   .rooms-layout,
   .tenants-layout,
   .pricing-layout,
+  .utilities-layout,
   .toolbar,
   .form-grid,
+  .settlement-grid,
   .tenant-facts,
   .tenancy-actions {
     grid-template-columns: 1fr;

@@ -51,6 +51,16 @@
 - Sua chi so phai ghi audit log.
 - Neu invoice lien quan chua khoa, co the tinh lai; neu da khoa, phai tao dieu chinh.
 
+## Chot tien thang va tra phong
+
+- Tien phong, tien dien va tien nuoc cua phong dang thue duoc chot vao cuoi thang theo ky thang.
+- Neu nguoi thue vao phong giua thang, tien phong thang dau duoc tinh theo so ngay o tu ngay vao phong den cuoi thang; dien nuoc tinh theo chi so tu luc vao den cuoi thang.
+- Neu nguoi thue tra phong giua thang, chu tro phai nhap chi so dien nuoc tai thoi diem tra phong va chot tien ngay cho giai doan tu dau thang den ngay tra phong.
+- So ngay tinh tien phong la so ngay thuc te trong thang, khong quy doi co dinh thanh 30 ngay.
+- Tien da tra truoc trong thang chi duoc tru vao tien phong cua ky do.
+- Neu tien da tra truoc lon hon tien phong phai thu, phan du duoc luu thanh so du chuyen sang ky sau.
+- Neu tien da tra truoc nho hon tien phong phai thu, he thong ghi nhan so con phai thu; module cong no chi tiet co the xu ly o phase sau.
+
 ## Hoa don
 
 - Hoa don co the gom tien phong, dien, nuoc, rac, internet, dich vu, phu thu, giam gia, dieu chinh va no cu.

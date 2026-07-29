@@ -20,5 +20,6 @@ import { PRICING_REPOSITORY } from "./pricing.tokens.js";
           : PrismaPricingRepository,
     },
   ],
+  exports: [PricingService],
 })
 export class PricingModule {}

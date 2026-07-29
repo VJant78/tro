@@ -4,6 +4,7 @@ import { LoginPanel } from "./components/login-panel";
 import { PricingPage } from "./pricing/pricing-page";
 import { RoomsPage } from "./rooms/rooms-page";
 import { TenantsPage } from "./tenants/tenants-page";
+import { UtilitiesPage } from "./utilities/utilities-page";
 
 const metrics = [
   ["Tong phong", "0"],
@@ -30,6 +31,8 @@ export function App() {
         <RoomsPage />
       ) : path === "/tenants" ? (
         <TenantsPage />
+      ) : path === "/utilities" ? (
+        <UtilitiesPage />
       ) : path === "/settings" ? (
         <PricingPage />
       ) : (

@@ -20,5 +20,6 @@ import { TENANT_REPOSITORY } from "./tenants.tokens.js";
           : PrismaTenantRepository,
     },
   ],
+  exports: [TenantsService],
 })
 export class TenantsModule {}

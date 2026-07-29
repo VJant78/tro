@@ -16,6 +16,7 @@
 - `tenancies`: tao lan thue, them/xoa nguoi o, chuyen phong, ket thuc thue.
 - `pricing-configs`: mot global config cho dien/nuoc/phi trong UI; API resolver van giu scope system/property/room/tenancy cho invoice snapshot ve sau.
 - `utility-readings`: ghi/sua/finalize chi so dien nuoc.
+- `settlements`: preview/chot tien thang va tra phong giua thang, ghi so du tra truoc.
 - `invoices`: tao nhap, phat hanh, khoa, huy, xem item, tinh lai khi duoc phep.
 - `payments`: ghi nhan, phan bo, huy/hoan tac, idempotency.
 - `debts`: danh sach phong no, chi tiet cong no phong.
@@ -58,6 +59,18 @@
 - `PATCH /api/v1/pricing-configs/:id`: owner/manager update config.
 - `DELETE /api/v1/pricing-configs/:id`: owner/manager deactivate config.
 - Priority: invoice snapshot, tenancy, room, property, system. Phase 4 P4-001 implements resolver priority; invoice snapshot application is enforced when invoice module lands.
+
+### Utility Readings And Settlements
+
+- `GET /api/v1/utility-readings`: protected list, supports `roomId`, `tenancyId`, `billingYear`, `billingMonth`, `readingKind`, `status`.
+- `POST /api/v1/utility-readings`: owner/manager/staff create draft reading. Server validates current reading is not lower than previous reading and computes usage/amount from effective utility pricing.
+- `POST /api/v1/utility-readings/:id/finalize`: owner/manager/staff finalize a reading. Duplicate finalized reading for same room, period and kind returns `409`.
+- `GET /api/v1/settlements`: protected list, supports `roomId`, `tenancyId`, `billingYear`, `billingMonth`.
+- `POST /api/v1/settlements/preview`: owner/manager/staff preview monthly or move-out settlement from a finalized utility reading without persisting.
+- `POST /api/v1/settlements`: owner/manager/staff finalize settlement, stores settlement totals and account ledger entries for prepayment/applied credit.
+- Settlement currently includes room rent, electricity and water. Fixed trash/internet/service fees remain invoice-module work.
+- Proration uses actual days in the billing month. Period dates are inclusive for Phase 4 settlement UI.
+- Prepayment credit is applied only to prorated rent. Remaining credit is carried forward; remaining unpaid utility/rent amount is stored on settlement as `outstandingAmount`.
 
 ## Validation
 

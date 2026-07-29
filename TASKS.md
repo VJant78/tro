@@ -14,7 +14,7 @@
 
 ## Ready
 
-- [ ] P4-002 | Phase 4 | Utility readings | Agent: Backend + Database + Frontend | Dependency: P4-001 | Scope: split by Lead before start | AC: reading validation, one finalized reading per room/period, audit | Verify: `npm run check`, integration/E2E | Risk: High
+Chua co.
 
 ## In Progress
 
@@ -38,6 +38,7 @@
 
 ## Done
 
+- [x] P4-002 | Phase 4 | Utility readings + monthly/move-out settlement | Agent: Lead + Backend + Database + Frontend + QA/BA | Scope: `packages/database/**`, `apps/api/**`, `apps/web/**`, docs, tests | AC: reading validation, one finalized reading per room/period, monthly close, move-out mid-month close, first-month proration, prepaid applied to rent, carry-forward credit, audit | Verify: `npm run check`, `npm run build`, `npm run test:e2e`, `npm run audit`, DB migrate/validate/seed, PostgreSQL utility settlement smoke passed | Risk: High
 - [x] P4-001 | Phase 4 | Pricing configuration | Agent: Backend + Database + Frontend + Architecture + QA | Scope: `packages/database/**`, `apps/api/**`, `apps/web/**`, `tests/**`, docs | AC: system/property/room/tenancy pricing priority, effective resolver, validation, audit, UI | Verify: `npm run check`, API tests, web tests/build, PostgreSQL Pricing smoke passed | Risk: High
 - [x] UX-FIX-001 | Phase 4 | Occupancy, tenant role/filter, group transfer and global settings refinement | Agent: Lead + Backend + Frontend + Database + QA/BA | Scope: `apps/api/**`, `apps/web/**`, `packages/database/**`, docs, tests | AC: rooms show representative/start/co-tenant count and detail occupants; tenants filter by room and show representative/co-tenant role; assignment auto-selects representative/co-tenant without rent/deposit form fields; transfer moves whole group; settings uses one global utility/fee config without room rent | Verify: `npm run check`, `npm run build`, `npm run test:e2e`, `npm run audit`, PostgreSQL occupancy/transfer/global settings smoke passed | Risk: High
 - [x] UX-FIX-002 | Phase 4 | Tenant detail occupancy actions | Agent: Lead + Backend + Frontend + QA | Scope: `apps/api/**`, `apps/web/**`, docs, tests | AC: newly created active tenant shows not-in-room until membership exists; tenant detail shows current room, joined date, role and active co-occupants; individual member transfer and leave actions exist; whole-room transfer remains separate; representative individual transfer/leave is blocked while co-tenants remain | Verify: API/web focused tests, `npm run check`, build/E2E/audit, PostgreSQL individual member smoke | Risk: High
@@ -79,6 +80,8 @@
 - PostgreSQL Pricing smoke: authenticated room pricing config create and effective resolver passed against local DB.
 - PostgreSQL occupancy/transfer/settings smoke: authenticated API smoke passed for representative assignment, co-tenant assignment, tenant `filter[roomId]`, room `currentOccupancy`, whole-group transfer and `pricing-configs/global`.
 - PostgreSQL individual member smoke: authenticated API smoke passed for blocking representative solo transfer while co-tenants remain, transferring one co-tenant to another room, current tenancy detail, old room occupancy and member leave.
+- Database migration artifacts: `packages/database/prisma/migrations/20260729102938_phase4_utility_settlement/migration.sql` and `packages/database/prisma/migrations/20260729105200_phase4_settlement_unique_guards/migration.sql` generated/applied against local PostgreSQL.
+- PostgreSQL utility settlement smoke: authenticated API smoke passed after DB unique guard migration for room + tenant + tenancy + monthly reading finalize + settlement preview/finalize, including first-month proration and prepaid carry-forward. Smoke room code: `UTL-21398461`.
 - Docker: `docker --version` failed because Docker command is not available in current shell.
 - Git status/history: `git status --short` and `git log --oneline -5` passed; Phase 2/3 changes are uncommitted pending owner review.
 

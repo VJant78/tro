@@ -9,9 +9,17 @@ import { PricingModule } from "./pricing/pricing.module.js";
 import { RoomsModule } from "./rooms/rooms.module.js";
 import { RbacGuard } from "./security/rbac.guard.js";
 import { TenantsModule } from "./tenants/tenants.module.js";
+import { UtilitiesModule } from "./utilities/utilities.module.js";
 
 @Module({
-  imports: [AuditModule, AuthModule, RoomsModule, TenantsModule, PricingModule],
+  imports: [
+    AuditModule,
+    AuthModule,
+    RoomsModule,
+    TenantsModule,
+    PricingModule,
+    UtilitiesModule,
+  ],
   controllers: [HealthController],
   providers: [
     { provide: APP_FILTER, useClass: ApiExceptionFilter },
