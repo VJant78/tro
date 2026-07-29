@@ -67,6 +67,18 @@ export function UtilitiesPage() {
         : null,
     [occupancy, period, settlements],
   );
+  const selectedPeriodReading = useMemo(
+    () =>
+      period
+        ? (readings.find(
+            (reading) =>
+              reading.billingPeriodStart === period.start &&
+              reading.billingPeriodEnd === period.end &&
+              reading.readingKind === form.settlementType,
+          ) ?? null)
+        : null,
+    [form.settlementType, period, readings],
+  );
 
   async function load() {
     setIsLoading(true);
@@ -199,12 +211,15 @@ export function UtilitiesPage() {
       billingYear: targetPeriod.billingYear,
       billingMonth: targetPeriod.billingMonth,
       periodEnd: targetPeriod.end,
-      utilityReading: {
-        electricityPrevious: form.electricityPrevious,
-        electricityCurrent: form.electricityCurrent,
-        waterPrevious: form.waterPrevious,
-        waterCurrent: form.waterCurrent,
-      },
+      utilityReadingId: selectedPeriodReading?.id,
+      utilityReading: selectedPeriodReading
+        ? undefined
+        : {
+            electricityPrevious: form.electricityPrevious,
+            electricityCurrent: form.electricityCurrent,
+            waterPrevious: form.waterPrevious,
+            waterCurrent: form.waterCurrent,
+          },
       prepaidAmount: form.prepaidAmount || "0",
       notes: form.notes || null,
     };
@@ -394,6 +409,10 @@ export function UtilitiesPage() {
           {selectedPeriodSettlement ? (
             <div className="notice warning">
               <strong>Ky nay da chot</strong>
+            </div>
+          ) : selectedPeriodReading ? (
+            <div className="notice warning">
+              <strong>Ky nay da co chi so, se dung lai de chot tien</strong>
             </div>
           ) : null}
           <label className="field">

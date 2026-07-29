@@ -579,6 +579,77 @@ describe("API foundation", () => {
       .expect(409);
   });
 
+  it("reuses a finalized reading when settlement was not created yet", async () => {
+    const agent = request.agent(app.getHttpServer());
+    const roomId = "00000000-0000-4000-8000-000000000621";
+
+    await agent
+      .post("/api/v1/auth/login")
+      .send({ email: "owner@example.local", password: "ChangeMe123!" })
+      .expect(201);
+
+    const tenant = await agent
+      .post("/api/v1/tenants")
+      .send({
+        fullName: "Dang Co Chi So",
+        phone: "0924000001",
+        identityNumber: "052345678901",
+      })
+      .expect(201);
+
+    const tenancy = await agent
+      .post("/api/v1/tenancies")
+      .send({
+        roomId,
+        representativeTenantId: tenant.body.id,
+        startDate: "2026-08-16",
+        rentAmount: "3100000",
+      })
+      .expect(201);
+
+    const reading = await agent
+      .post("/api/v1/utility-readings")
+      .send({
+        roomId,
+        tenancyId: tenancy.body.id,
+        readingKind: "MONTHLY",
+        billingPeriodStart: "2026-08-16",
+        billingPeriodEnd: "2026-08-31",
+        billingYear: 2026,
+        billingMonth: 8,
+        electricityPrevious: "0",
+        electricityCurrent: "6",
+        waterPrevious: "0",
+        waterCurrent: "1",
+      })
+      .expect(201);
+
+    await agent
+      .post(`/api/v1/utility-readings/${reading.body.id}/finalize`)
+      .expect(201);
+
+    await agent
+      .post("/api/v1/settlements")
+      .send({
+        tenancyId: tenancy.body.id,
+        settlementType: "MONTHLY",
+        billingYear: 2026,
+        billingMonth: 8,
+        periodEnd: "2026-08-31",
+        utilityReading: {
+          electricityPrevious: "0",
+          electricityCurrent: "6",
+          waterPrevious: "0",
+          waterCurrent: "1",
+        },
+      })
+      .expect(201)
+      .expect(({ body }) => {
+        expect(body.utilityReadingId).toBe(reading.body.id);
+        expect(body.status).toBe("FINALIZED");
+      });
+  });
+
   it("settles move-out rent through the actual leaving date", async () => {
     const agent = request.agent(app.getHttpServer());
     const roomId = "00000000-0000-4000-8000-000000000611";

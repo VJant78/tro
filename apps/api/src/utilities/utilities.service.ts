@@ -103,30 +103,32 @@ export class UtilitiesService {
         billingPeriodEnd: preview.periodEnd,
         readingKind: input.settlementType,
       });
-      if (duplicateReading) throw new FinalizedReadingConflictException();
-
-      const draftReading = await this.createReading(
-        {
-          roomId: preview.roomId,
-          tenancyId: preview.tenancyId,
-          readingKind: input.settlementType,
-          billingPeriodStart: preview.periodStart,
-          billingPeriodEnd: preview.periodEnd,
-          billingYear: preview.billingYear,
-          billingMonth: preview.billingMonth,
-          electricityPrevious: input.utilityReading.electricityPrevious,
-          electricityCurrent: input.utilityReading.electricityCurrent,
-          waterPrevious: input.utilityReading.waterPrevious,
-          waterCurrent: input.utilityReading.waterCurrent,
-          notes: input.notes,
-        },
-        actorUserId,
-      );
-      const finalizedReading = await this.finalizeReading(
-        draftReading.id,
-        actorUserId,
-      );
-      utilityReadingId = finalizedReading.id;
+      if (duplicateReading) {
+        utilityReadingId = duplicateReading.id;
+      } else {
+        const draftReading = await this.createReading(
+          {
+            roomId: preview.roomId,
+            tenancyId: preview.tenancyId,
+            readingKind: input.settlementType,
+            billingPeriodStart: preview.periodStart,
+            billingPeriodEnd: preview.periodEnd,
+            billingYear: preview.billingYear,
+            billingMonth: preview.billingMonth,
+            electricityPrevious: input.utilityReading.electricityPrevious,
+            electricityCurrent: input.utilityReading.electricityCurrent,
+            waterPrevious: input.utilityReading.waterPrevious,
+            waterCurrent: input.utilityReading.waterCurrent,
+            notes: input.notes,
+          },
+          actorUserId,
+        );
+        const finalizedReading = await this.finalizeReading(
+          draftReading.id,
+          actorUserId,
+        );
+        utilityReadingId = finalizedReading.id;
+      }
       preview = await this.calculateSettlement({
         ...input,
         utilityReadingId,
