@@ -546,9 +546,9 @@ describe("API foundation", () => {
         expect(body.daysInMonth).toBe(31);
         expect(body.proratedRentAmount).toBe("1600000");
         expect(body.totalAmount).toBe("1665000");
-        expect(body.prepaidAppliedAmount).toBe("1600000");
-        expect(body.carryForwardAmount).toBe("400000");
-        expect(body.outstandingAmount).toBe("65000");
+        expect(body.prepaidAppliedAmount).toBe("1665000");
+        expect(body.carryForwardAmount).toBe("335000");
+        expect(body.outstandingAmount).toBe("0");
       });
 
     await agent
@@ -564,7 +564,7 @@ describe("API foundation", () => {
       .expect(201)
       .expect(({ body }) => {
         expect(body.status).toBe("FINALIZED");
-        expect(body.carryForwardAmount).toBe("400000");
+        expect(body.carryForwardAmount).toBe("335000");
       });
 
     await agent

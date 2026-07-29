@@ -2,6 +2,7 @@ import { FormEvent, useEffect, useMemo, useState } from "react";
 import { Button, StatusBadge } from "@repo/ui";
 import { ApiError, apiFetch } from "../api";
 import type { Invoice, PaymentMethod } from "../billing/types";
+import type { Room, RoomListResponse } from "../rooms/types";
 import type { SettlementPreview } from "../utilities/types";
 
 const emptyPayment = {
@@ -13,6 +14,7 @@ const emptyPayment = {
 export function InvoicesPage() {
   const [settlements, setSettlements] = useState<SettlementPreview[]>([]);
   const [invoices, setInvoices] = useState<Invoice[]>([]);
+  const [rooms, setRooms] = useState<Room[]>([]);
   const [selectedSettlementId, setSelectedSettlementId] = useState("");
   const [selectedInvoiceId, setSelectedInvoiceId] = useState("");
   const [payment, setPayment] = useState(emptyPayment);
@@ -36,12 +38,15 @@ export function InvoicesPage() {
     setIsLoading(true);
     setError(null);
     try {
-      const [settlementResponse, invoiceResponse] = await Promise.all([
-        apiFetch<SettlementPreview[]>("/settlements"),
-        apiFetch<Invoice[]>("/invoices"),
-      ]);
+      const [settlementResponse, invoiceResponse, roomResponse] =
+        await Promise.all([
+          apiFetch<SettlementPreview[]>("/settlements"),
+          apiFetch<Invoice[]>("/invoices"),
+          apiFetch<RoomListResponse>("/rooms?limit=100&sort=code:asc"),
+        ]);
       setSettlements(settlementResponse);
       setInvoices(invoiceResponse);
+      setRooms(roomResponse.data);
       setSelectedInvoiceId(
         (current) => current || invoiceResponse[0]?.id || "",
       );
@@ -146,7 +151,7 @@ export function InvoicesPage() {
               <option value="">Chon ky chot</option>
               {finalizedSettlements.map((settlement) => (
                 <option key={settlement.id ?? ""} value={settlement.id ?? ""}>
-                  {settlement.representativeTenantName ?? "Nguoi dai dien"} -{" "}
+                  Phong {roomCodeFor(settlement.roomId, rooms)} -{" "}
                   {formatDate(settlement.periodStart)} den{" "}
                   {formatDate(settlement.periodEnd)}
                 </option>
@@ -349,6 +354,10 @@ function formatMoney(value: string | number) {
 function formatDate(value: string) {
   if (!value) return "-";
   return new Intl.DateTimeFormat("vi-VN").format(new Date(`${value}T00:00:00`));
+}
+
+function roomCodeFor(roomId: string, rooms: Room[]) {
+  return rooms.find((room) => room.id === roomId)?.code ?? roomId.slice(0, 8);
 }
 
 function messageFor(error: unknown) {

@@ -456,7 +456,7 @@ export function UtilitiesPage() {
                 value={formatMoney(preview.waterAmount)}
               />
               <Fact
-                label="Da tru tien phong"
+                label="Da tru tong tien"
                 value={formatMoney(preview.prepaidAppliedAmount)}
               />
               <Fact

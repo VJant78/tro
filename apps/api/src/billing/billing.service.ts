@@ -151,6 +151,8 @@ export class BillingService {
 
 function invoiceItemsForSettlement(settlement: {
   id: string;
+  billingYear: number;
+  billingMonth: number;
   occupiedDays: number;
   daysInMonth: number;
   proratedRentAmount: string;
@@ -161,7 +163,7 @@ function invoiceItemsForSettlement(settlement: {
   const items: InvoiceCreateInput["items"] = [
     {
       itemType: "RENT" as const,
-      description: `Tien phong ${settlement.occupiedDays}/${settlement.daysInMonth} ngay`,
+      description: `Tien phong thang ${settlement.billingMonth}/${settlement.billingYear}`,
       quantity: String(settlement.occupiedDays),
       unit: "ngay",
       unitPrice: String(

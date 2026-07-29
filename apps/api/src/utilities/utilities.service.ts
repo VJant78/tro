@@ -263,7 +263,7 @@ export class UtilitiesService {
     );
     const newPrepaidAmount = Number(input.prepaidAmount ?? "0");
     const availableCredit = creditBalanceBefore + newPrepaidAmount;
-    const prepaidAppliedAmount = Math.min(availableCredit, proratedRentAmount);
+    const prepaidAppliedAmount = Math.min(availableCredit, totalAmount);
     const carryForwardAmount = Math.max(
       0,
       availableCredit - prepaidAppliedAmount,

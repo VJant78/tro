@@ -32,8 +32,8 @@
 - Given phong co tenancy active tu `2026-08-01`, gia phong `3,100,000`, reading thang 8 da finalized va khong co tra truoc, when chu tro chot thang `2026-08`, then settlement gom tien phong tron thang, tien dien, tien nuoc va khong tao ban ghi trung cho cung phong/tenancy/ky.
 - Given nguoi thue vao ngay `2026-08-16`, gia phong `3,100,000`, when chot thang `2026-08`, then tien phong duoc tinh `16 / 31` ngay va dien nuoc tinh theo reading tu ngay vao den `2026-08-31`.
 - Given nguoi thue tra phong ngay `2026-08-15`, gia phong `3,100,000`, when chu tro nhap reading tra phong va chot tra phong, then tien phong duoc tinh `15 / 31` ngay va settlement duoc tao ngay, khong doi den cuoi thang.
-- Given phong co tien tra truoc `2,000,000` va tien phong prorate cua ky la `1,600,000`, when chot settlement, then he thong chi tru toi da `1,600,000` vao tien phong va luu `400,000` lam so du chuyen ky sau.
-- Given tien tra truoc nho hon tien phong prorate, when chot settlement, then he thong ghi so tien con phai thu trong settlement nhung chua bat buoc xu ly cong no chi tiet o phase nay.
+- Given phong co tien tra truoc `2,000,000` va tong tien ky la `1,665,000`, when chot settlement, then he thong tru toi da `1,665,000` vao tong tien ky va luu `335,000` lam so du chuyen ky sau.
+- Given tien tra truoc nho hon tong tien ky, when chot settlement, then he thong ghi so tien con phai thu trong settlement nhung chua bat buoc xu ly cong no chi tiet o phase nay.
 - Given settlement da finalized, when chu tro gui lai thao tac chot cung phong/tenancy/period/type, then he thong khong tao ban ghi duplicate va tra ve loi/conflict hoac ket qua idempotent theo contract duoc chon.
 - Given settlement/reading duoc tao, sua, finalize hoac void, when xem audit log, then co log actor, action, entity id, old/new value va timestamp.
 

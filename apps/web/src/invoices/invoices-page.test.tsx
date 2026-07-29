@@ -51,7 +51,7 @@ const invoice = {
       id: "item-rent",
       invoiceId: "00000000-0000-4000-8000-000000000902",
       itemType: "RENT",
-      description: "Tien phong 31/31 ngay",
+      description: "Tien phong thang 8/2026",
       quantity: "31",
       unit: "ngay",
       unitPrice: "96774",
@@ -70,6 +70,27 @@ describe("InvoicesPage", () => {
       if (url.endsWith("/settlements")) return jsonResponse([settlement]);
       if (url.endsWith("/invoices") && method === "GET") {
         return jsonResponse([invoice]);
+      }
+      if (url.includes("/rooms?")) {
+        return jsonResponse({
+          data: [
+            {
+              id: settlement.roomId,
+              code: "A-101",
+              name: "Phong A101",
+              roomType: null,
+              status: "OCCUPIED",
+              defaultRentAmount: "3000000",
+              defaultBillingCycleType: "MONTHLY",
+              defaultBillingCycleCount: 1,
+              maxOccupants: 2,
+              depositAmount: "0",
+              notes: null,
+              currentOccupancy: null,
+            },
+          ],
+          page: { limit: 100, nextCursor: null, hasMore: false },
+        });
       }
       if (url.endsWith("/invoices/from-settlement")) {
         return jsonResponse(invoice, 201);
@@ -101,6 +122,9 @@ describe("InvoicesPage", () => {
     render(<InvoicesPage />);
 
     expect(await screen.findAllByText("INV-20260831-ABC")).toHaveLength(2);
+    expect(
+      screen.getByText("Phong A-101 - 1/8/2026 den 31/8/2026"),
+    ).toBeInTheDocument();
     await user.click(screen.getByRole("button", { name: "Tao hoa don" }));
     await waitFor(() => {
       expect(globalThis.fetch).toHaveBeenCalledWith(

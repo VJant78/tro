@@ -253,7 +253,7 @@ export class PrismaUtilitiesRepository implements UtilitiesRepository {
             entryType: "CREDIT_APPLIED",
             amount: input.creditAppliedAmount,
             effectiveOn: dateValue(input.settlement.periodEnd),
-            notes: "Tien tra truoc da tru vao tien phong",
+            notes: "Tien tra truoc da tru vao tong tien",
           },
         });
       }

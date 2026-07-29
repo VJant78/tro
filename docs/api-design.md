@@ -70,7 +70,7 @@
 - `POST /api/v1/settlements`: owner/manager/staff finalize settlement, stores settlement totals and account ledger entries for prepayment/applied credit.
 - Settlement currently includes room rent, electricity and water. Fixed trash/internet/service fees remain invoice-module work.
 - Proration uses actual days in the billing month. Period dates are inclusive for Phase 4 settlement UI.
-- Prepayment credit is applied only to prorated rent. Remaining credit is carried forward; remaining unpaid utility/rent amount is stored on settlement as `outstandingAmount`.
+- Prepayment credit is applied to the settlement total for the period. Remaining credit is carried forward; remaining unpaid utility/rent amount is stored on settlement as `outstandingAmount`.
 
 ### Invoices, Payments And Debts
 

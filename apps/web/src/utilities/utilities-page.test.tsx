@@ -92,9 +92,9 @@ describe("UtilitiesPage", () => {
             electricityAmount: "35000",
             waterAmount: "30000",
             totalAmount: "1665000",
-            prepaidAppliedAmount: "1600000",
-            carryForwardAmount: "400000",
-            outstandingAmount: "65000",
+            prepaidAppliedAmount: "1665000",
+            carryForwardAmount: "335000",
+            outstandingAmount: "0",
             creditBalanceBefore: "0",
             newPrepaidAmount: "2000000",
             creditBalanceAfter: "400000",
@@ -130,7 +130,7 @@ describe("UtilitiesPage", () => {
     await user.click(screen.getByRole("button", { name: "Tinh tam" }));
 
     expect(await screen.findByText("Du chuyen ky sau")).toBeInTheDocument();
-    expect(screen.getByText("400.000 VND")).toBeInTheDocument();
+    expect(screen.getByText("335.000 VND")).toBeInTheDocument();
     await waitFor(() => {
       expect(globalThis.fetch).toHaveBeenCalledWith(
         expect.stringContaining("/settlements/preview"),
