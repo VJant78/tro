@@ -43,35 +43,30 @@ describe("UtilitiesPage", () => {
         return jsonResponse([]);
       }
 
-      if (url.endsWith("/utility-readings") && method === "POST") {
-        return jsonResponse(
+      if (url.includes("/utility-readings?")) {
+        return jsonResponse([
           {
-            id: "reading-1",
+            id: "previous-reading",
             roomId: room.id,
             tenancyId: room.currentOccupancy.tenancyId,
             readingKind: "MONTHLY",
-            billingPeriodStart: "2026-08-16",
-            billingPeriodEnd: "2026-08-31",
+            billingPeriodStart: "2026-07-16",
+            billingPeriodEnd: "2026-08-15",
             billingYear: 2026,
             billingMonth: 8,
-            electricityPrevious: "10",
-            electricityCurrent: "20",
+            electricityPrevious: "0",
+            electricityCurrent: "10",
             electricityUsage: "10",
             electricityUnitPrice: "3500",
             electricityAmount: "35000",
-            waterPrevious: "1",
-            waterCurrent: "3",
-            waterUsage: "2",
+            waterPrevious: "0",
+            waterCurrent: "1",
+            waterUsage: "1",
             waterUnitPrice: "15000",
-            waterAmount: "30000",
-            status: "DRAFT",
+            waterAmount: "15000",
+            status: "FINALIZED",
           },
-          201,
-        );
-      }
-
-      if (url.includes("/utility-readings/reading-1/finalize")) {
-        return jsonResponse({ id: "reading-1", status: "FINALIZED" }, 201);
+        ]);
       }
 
       if (url.endsWith("/settlements/preview")) {
@@ -85,7 +80,7 @@ describe("UtilitiesPage", () => {
             representativeTenantId:
               room.currentOccupancy.representativeTenantId,
             representativeTenantName: "Nguyen Dai Dien",
-            utilityReadingId: "reading-1",
+            utilityReadingId: null,
             periodStart: "2026-08-16",
             periodEnd: "2026-08-31",
             billingYear: 2026,
@@ -123,17 +118,11 @@ describe("UtilitiesPage", () => {
     expect(
       await screen.findByText("A-101 - Nguyen Dai Dien"),
     ).toBeInTheDocument();
+    expect(await screen.findAllByDisplayValue("10")).toHaveLength(2);
+    expect(screen.getAllByDisplayValue("1")).toHaveLength(2);
 
-    await user.clear(screen.getByLabelText("Nam"));
-    await user.type(screen.getByLabelText("Nam"), "2026");
-    await user.clear(screen.getByLabelText("Thang"));
-    await user.type(screen.getByLabelText("Thang"), "8");
-    await user.clear(screen.getByLabelText("Dien cu"));
-    await user.type(screen.getByLabelText("Dien cu"), "10");
     await user.clear(screen.getByLabelText("Dien moi"));
     await user.type(screen.getByLabelText("Dien moi"), "20");
-    await user.clear(screen.getByLabelText("Nuoc cu"));
-    await user.type(screen.getByLabelText("Nuoc cu"), "1");
     await user.clear(screen.getByLabelText("Nuoc moi"));
     await user.type(screen.getByLabelText("Nuoc moi"), "3");
     await user.clear(screen.getByLabelText("Da tra truoc"));
@@ -145,6 +134,10 @@ describe("UtilitiesPage", () => {
     await waitFor(() => {
       expect(globalThis.fetch).toHaveBeenCalledWith(
         expect.stringContaining("/settlements/preview"),
+        expect.objectContaining({ method: "POST" }),
+      );
+      expect(globalThis.fetch).not.toHaveBeenCalledWith(
+        expect.stringContaining("/utility-readings"),
         expect.objectContaining({ method: "POST" }),
       );
     });

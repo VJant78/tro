@@ -6,18 +6,13 @@ import type {
   SettlementPreview,
   SettlementType,
   UtilityReading,
-  UtilityReadingKind,
 } from "./types";
 
-const today = new Date();
-const defaultYear = String(today.getFullYear());
-const defaultMonth = String(today.getMonth() + 1);
+const todayDate = new Date().toISOString().slice(0, 10);
 
 const emptyForm = {
   roomId: "",
   settlementType: "MONTHLY" as SettlementType,
-  billingYear: defaultYear,
-  billingMonth: defaultMonth,
   periodEnd: "",
   electricityPrevious: "0",
   electricityCurrent: "0",
@@ -30,7 +25,7 @@ const emptyForm = {
 export function UtilitiesPage() {
   const [rooms, setRooms] = useState<Room[]>([]);
   const [form, setForm] = useState(emptyForm);
-  const [reading, setReading] = useState<UtilityReading | null>(null);
+  const [readings, setReadings] = useState<UtilityReading[]>([]);
   const [preview, setPreview] = useState<SettlementPreview | null>(null);
   const [settlements, setSettlements] = useState<SettlementPreview[]>([]);
   const [error, setError] = useState<string | null>(null);
@@ -47,6 +42,31 @@ export function UtilitiesPage() {
     [form.roomId, rooms],
   );
   const occupancy = selectedRoom?.currentOccupancy ?? null;
+  const period = useMemo(
+    () =>
+      occupancy
+        ? periodFor({
+            occupancyStartedOn: occupancy.startedOn,
+            tenancyId: occupancy.tenancyId,
+            settlementType: form.settlementType,
+            requestedMoveOutDate: form.periodEnd,
+            settlements,
+          })
+        : null,
+    [form.periodEnd, form.settlementType, occupancy, settlements],
+  );
+  const selectedPeriodSettlement = useMemo(
+    () =>
+      period && occupancy
+        ? (settlements.find(
+            (item) =>
+              item.tenancyId === occupancy.tenancyId &&
+              item.periodStart === period.start &&
+              item.periodEnd === period.end,
+          ) ?? null)
+        : null,
+    [occupancy, period, settlements],
+  );
 
   async function load() {
     setIsLoading(true);
@@ -76,71 +96,77 @@ export function UtilitiesPage() {
     void load();
   }, []);
 
+  useEffect(() => {
+    if (!form.roomId) {
+      setReadings([]);
+      return;
+    }
+
+    let isActive = true;
+    async function loadReadings() {
+      try {
+        const params = new URLSearchParams({
+          roomId: form.roomId,
+          status: "FINALIZED",
+        });
+        const response = await apiFetch<UtilityReading[]>(
+          `/utility-readings?${params.toString()}`,
+        );
+        if (isActive) setReadings(response);
+      } catch (loadError) {
+        if (isActive) setError(messageFor(loadError));
+      }
+    }
+
+    void loadReadings();
+    return () => {
+      isActive = false;
+    };
+  }, [form.roomId]);
+
+  useEffect(() => {
+    if (!period) return;
+    const previousReading = readings
+      .filter((reading) => reading.billingPeriodEnd < period.start)
+      .sort((left, right) =>
+        right.billingPeriodEnd.localeCompare(left.billingPeriodEnd),
+      )[0];
+    const electricityPrevious = previousReading?.electricityCurrent ?? "0";
+    const waterPrevious = previousReading?.waterCurrent ?? "0";
+    setForm((current) => ({
+      ...current,
+      electricityPrevious,
+      waterPrevious,
+      electricityCurrent:
+        Number(current.electricityCurrent) < Number(electricityPrevious)
+          ? electricityPrevious
+          : current.electricityCurrent,
+      waterCurrent:
+        Number(current.waterCurrent) < Number(waterPrevious)
+          ? waterPrevious
+          : current.waterCurrent,
+    }));
+  }, [period, readings]);
+
   async function submit(event: FormEvent<HTMLFormElement>) {
     event.preventDefault();
-    if (!occupancy) return;
+    if (!occupancy || !period) return;
     setIsSaving(true);
     setError(null);
     setFieldErrors({});
     setPreview(null);
-    setReading(null);
-
-    const period = periodFor(form, occupancy.startedOn);
-    const readingKind: UtilityReadingKind =
-      form.settlementType === "MOVE_OUT" ? "MOVE_OUT" : "MONTHLY";
 
     try {
-      const createdReading = await apiFetch<UtilityReading>(
-        "/utility-readings",
-        {
-          method: "POST",
-          body: JSON.stringify({
-            roomId: form.roomId,
-            tenancyId: occupancy.tenancyId,
-            readingKind,
-            billingPeriodStart: period.start,
-            billingPeriodEnd: period.end,
-            billingYear: Number(form.billingYear),
-            billingMonth: Number(form.billingMonth),
-            electricityPrevious: form.electricityPrevious,
-            electricityCurrent: form.electricityCurrent,
-            waterPrevious: form.waterPrevious,
-            waterCurrent: form.waterCurrent,
-            notes: form.notes || null,
-          }),
-        },
-      );
-      const finalizedReading = await apiFetch<UtilityReading>(
-        `/utility-readings/${createdReading.id}/finalize`,
-        { method: "POST" },
-      );
-      setReading(finalizedReading);
-
       const settlementPreview = await apiFetch<SettlementPreview>(
         "/settlements/preview",
         {
           method: "POST",
-          body: JSON.stringify({
-            tenancyId: occupancy.tenancyId,
-            settlementType: form.settlementType,
-            billingYear: Number(form.billingYear),
-            billingMonth: Number(form.billingMonth),
-            periodEnd: period.end,
-            utilityReadingId: finalizedReading.id,
-            prepaidAmount: form.prepaidAmount || "0",
-            notes: form.notes || null,
-          }),
+          body: JSON.stringify(settlementPayload(occupancy.tenancyId, period)),
         },
       );
       setPreview(settlementPreview);
     } catch (saveError) {
-      if (saveError instanceof ApiError && saveError.details?.length) {
-        setFieldErrors(
-          Object.fromEntries(
-            saveError.details.map((detail) => [detail.field, detail.message]),
-          ),
-        );
-      }
+      collectFieldErrors(saveError, setFieldErrors);
       setError(messageFor(saveError));
     } finally {
       setIsSaving(false);
@@ -148,31 +174,40 @@ export function UtilitiesPage() {
   }
 
   async function finalizeSettlement() {
-    if (!preview || !reading) return;
+    if (!preview || !period) return;
     setIsSaving(true);
     setError(null);
     try {
       await apiFetch<SettlementPreview>("/settlements", {
         method: "POST",
-        body: JSON.stringify({
-          tenancyId: preview.tenancyId,
-          settlementType: preview.settlementType,
-          billingYear: preview.billingYear,
-          billingMonth: preview.billingMonth,
-          periodEnd: preview.periodEnd,
-          utilityReadingId: reading.id,
-          prepaidAmount: form.prepaidAmount || "0",
-          notes: form.notes || null,
-        }),
+        body: JSON.stringify(settlementPayload(preview.tenancyId, period)),
       });
       setPreview(null);
-      setReading(null);
       await load();
     } catch (saveError) {
+      collectFieldErrors(saveError, setFieldErrors);
       setError(messageFor(saveError));
     } finally {
       setIsSaving(false);
     }
+  }
+
+  function settlementPayload(tenancyId: string, targetPeriod: BillingPeriod) {
+    return {
+      tenancyId,
+      settlementType: form.settlementType,
+      billingYear: targetPeriod.billingYear,
+      billingMonth: targetPeriod.billingMonth,
+      periodEnd: targetPeriod.end,
+      utilityReading: {
+        electricityPrevious: form.electricityPrevious,
+        electricityCurrent: form.electricityCurrent,
+        waterPrevious: form.waterPrevious,
+        waterCurrent: form.waterCurrent,
+      },
+      prepaidAmount: form.prepaidAmount || "0",
+      notes: form.notes || null,
+    };
   }
 
   return (
@@ -205,12 +240,14 @@ export function UtilitiesPage() {
             {settlements.map((item) => (
               <article
                 className="settlement-row"
-                key={item.id ?? item.periodEnd}
+                key={item.id ?? `${item.tenancyId}-${item.periodEnd}`}
               >
                 <span>
-                  <strong>
+                  <strong>Phong {roomCodeFor(item.roomId, rooms)}</strong>
+                  <small>
+                    Dai dien:{" "}
                     {item.representativeTenantName ?? "Nguoi dai dien"}
-                  </strong>
+                  </small>
                   <small>
                     {formatDate(item.periodStart)} -{" "}
                     {formatDate(item.periodEnd)}
@@ -246,7 +283,14 @@ export function UtilitiesPage() {
               Phong
               <select
                 onChange={(event) =>
-                  setForm({ ...form, roomId: event.target.value })
+                  setForm({
+                    ...form,
+                    roomId: event.target.value,
+                    electricityPrevious: "0",
+                    electricityCurrent: "0",
+                    waterPrevious: "0",
+                    waterCurrent: "0",
+                  })
                 }
                 value={form.roomId}
               >
@@ -266,6 +310,7 @@ export function UtilitiesPage() {
                   setForm({
                     ...form,
                     settlementType: event.target.value as SettlementType,
+                    periodEnd: "",
                   })
                 }
                 value={form.settlementType}
@@ -275,34 +320,28 @@ export function UtilitiesPage() {
               </select>
             </label>
             <label className="field">
-              Nam
+              Ky chot
               <input
-                inputMode="numeric"
-                onChange={(event) =>
-                  setForm({ ...form, billingYear: event.target.value })
+                readOnly
+                value={
+                  period
+                    ? `${formatDate(period.start)} - ${formatDate(period.end)}`
+                    : ""
                 }
-                value={form.billingYear}
-              />
-            </label>
-            <label className="field">
-              Thang
-              <input
-                inputMode="numeric"
-                onChange={(event) =>
-                  setForm({ ...form, billingMonth: event.target.value })
-                }
-                value={form.billingMonth}
               />
             </label>
             <label className="field">
               Ngay tra phong
               <input
                 disabled={form.settlementType === "MONTHLY"}
+                min={period?.start}
                 onChange={(event) =>
                   setForm({ ...form, periodEnd: event.target.value })
                 }
                 type="date"
-                value={form.periodEnd}
+                value={
+                  form.settlementType === "MOVE_OUT" && period ? period.end : ""
+                }
               />
             </label>
             <label className="field">
@@ -317,14 +356,7 @@ export function UtilitiesPage() {
             </label>
             <label className="field">
               Dien cu
-              <input
-                inputMode="decimal"
-                onChange={(event) =>
-                  setForm({ ...form, electricityPrevious: event.target.value })
-                }
-                value={form.electricityPrevious}
-              />
-              <FieldError message={fieldErrors.electricityPrevious} />
+              <input readOnly value={form.electricityPrevious} />
             </label>
             <label className="field">
               Dien moi
@@ -335,18 +367,13 @@ export function UtilitiesPage() {
                 }
                 value={form.electricityCurrent}
               />
-              <FieldError message={fieldErrors.electricityCurrent} />
+              <FieldError
+                message={fieldErrors["utilityReading.electricityCurrent"]}
+              />
             </label>
             <label className="field">
               Nuoc cu
-              <input
-                inputMode="decimal"
-                onChange={(event) =>
-                  setForm({ ...form, waterPrevious: event.target.value })
-                }
-                value={form.waterPrevious}
-              />
-              <FieldError message={fieldErrors.waterPrevious} />
+              <input readOnly value={form.waterPrevious} />
             </label>
             <label className="field">
               Nuoc moi
@@ -357,9 +384,16 @@ export function UtilitiesPage() {
                 }
                 value={form.waterCurrent}
               />
-              <FieldError message={fieldErrors.waterCurrent} />
+              <FieldError
+                message={fieldErrors["utilityReading.waterCurrent"]}
+              />
             </label>
           </div>
+          {selectedPeriodSettlement ? (
+            <div className="notice warning">
+              <strong>Ky nay da chot</strong>
+            </div>
+          ) : null}
           <label className="field">
             Ghi chu
             <textarea
@@ -370,7 +404,12 @@ export function UtilitiesPage() {
             />
           </label>
           <div className="form-actions">
-            <Button type="submit" disabled={isSaving || !occupancy}>
+            <Button
+              type="submit"
+              disabled={
+                isSaving || !occupancy || Boolean(selectedPeriodSettlement)
+              }
+            >
               {isSaving ? "Dang tinh" : "Tinh tam"}
             </Button>
           </div>
@@ -428,6 +467,44 @@ export function UtilitiesPage() {
   );
 }
 
+interface BillingPeriod {
+  start: string;
+  end: string;
+  billingYear: number;
+  billingMonth: number;
+}
+
+function periodFor(input: {
+  occupancyStartedOn: string;
+  tenancyId: string;
+  settlementType: SettlementType;
+  requestedMoveOutDate: string;
+  settlements: SettlementPreview[];
+}): BillingPeriod {
+  const lastSettlement = input.settlements
+    .filter((settlement) => settlement.tenancyId === input.tenancyId)
+    .sort((left, right) => right.periodEnd.localeCompare(left.periodEnd))[0];
+  const nextStart = lastSettlement
+    ? addDays(lastSettlement.periodEnd, 1)
+    : input.occupancyStartedOn;
+  const defaultEnd =
+    input.settlementType === "MOVE_OUT"
+      ? maxDateString(todayDate, nextStart)
+      : monthEndFor(nextStart);
+  const end =
+    input.settlementType === "MOVE_OUT" && input.requestedMoveOutDate
+      ? maxDateString(input.requestedMoveOutDate, nextStart)
+      : defaultEnd;
+  const { year, month } = yearMonthFor(end);
+
+  return {
+    start: nextStart,
+    end,
+    billingYear: year,
+    billingMonth: month,
+  };
+}
+
 function FieldError({ message }: { message?: string }) {
   return message ? <small className="field-error">{message}</small> : null;
 }
@@ -441,22 +518,46 @@ function Fact({ label, value }: { label: string; value: string }) {
   );
 }
 
-function periodFor(
-  form: typeof emptyForm,
-  startedOn: string,
-): { start: string; end: string } {
-  const year = Number(form.billingYear);
-  const month = Number(form.billingMonth);
-  const monthStart = `${year}-${String(month).padStart(2, "0")}-01`;
-  const monthEnd = `${year}-${String(month).padStart(2, "0")}-${String(
+function addDays(value: string, days: number) {
+  const date = new Date(`${value}T00:00:00.000Z`);
+  date.setUTCDate(date.getUTCDate() + days);
+  return date.toISOString().slice(0, 10);
+}
+
+function monthEndFor(value: string) {
+  const { year, month } = yearMonthFor(value);
+  return `${year}-${String(month).padStart(2, "0")}-${String(
     new Date(Date.UTC(year, month, 0)).getUTCDate(),
   ).padStart(2, "0")}`;
-  const start = startedOn > monthStart ? startedOn : monthStart;
-  const end =
-    form.settlementType === "MOVE_OUT" && form.periodEnd
-      ? form.periodEnd
-      : monthEnd;
-  return { start, end };
+}
+
+function yearMonthFor(value: string) {
+  const [yearText, monthText] = value.split("-");
+  return {
+    year: Number(yearText ?? "0"),
+    month: Number(monthText ?? "0"),
+  };
+}
+
+function maxDateString(left: string, right: string) {
+  return left >= right ? left : right;
+}
+
+function roomCodeFor(roomId: string, rooms: Room[]) {
+  return rooms.find((room) => room.id === roomId)?.code ?? roomId.slice(0, 8);
+}
+
+function collectFieldErrors(
+  error: unknown,
+  setter: (errors: Record<string, string>) => void,
+) {
+  if (error instanceof ApiError && error.details?.length) {
+    setter(
+      Object.fromEntries(
+        error.details.map((detail) => [detail.field, detail.message]),
+      ),
+    );
+  }
 }
 
 function formatMoney(value: string | number) {

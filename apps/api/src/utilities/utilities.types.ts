@@ -103,8 +103,16 @@ export interface SettlementInput {
   billingMonth: number;
   periodEnd?: string;
   utilityReadingId?: string | null;
+  utilityReading?: SettlementReadingInput;
   prepaidAmount?: string;
   notes?: string | null;
+}
+
+export interface SettlementReadingInput {
+  electricityPrevious: string;
+  electricityCurrent: string;
+  waterPrevious: string;
+  waterCurrent: string;
 }
 
 export interface SettlementPreviewRecord extends Omit<SettlementRecord, "id"> {

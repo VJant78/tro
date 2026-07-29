@@ -80,6 +80,33 @@ export const settlementInputSchema = z.object({
   billingMonth: z.coerce.number().int().min(1).max(12),
   periodEnd: dateSchema.optional(),
   utilityReadingId: uuidSchema.nullable().optional(),
+  utilityReading: z
+    .object({
+      electricityPrevious: decimalSchema,
+      electricityCurrent: decimalSchema,
+      waterPrevious: decimalSchema,
+      waterCurrent: decimalSchema,
+    })
+    .optional()
+    .superRefine((input, context) => {
+      if (!input) return;
+      if (
+        Number(input.electricityCurrent) < Number(input.electricityPrevious)
+      ) {
+        context.addIssue({
+          code: "custom",
+          path: ["electricityCurrent"],
+          message: "electricityCurrent must be greater than previous reading",
+        });
+      }
+      if (Number(input.waterCurrent) < Number(input.waterPrevious)) {
+        context.addIssue({
+          code: "custom",
+          path: ["waterCurrent"],
+          message: "waterCurrent must be greater than previous reading",
+        });
+      }
+    }),
   prepaidAmount: moneySchema.default("0"),
   notes: z.string().trim().max(1000).nullable().optional(),
 });

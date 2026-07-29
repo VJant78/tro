@@ -17,6 +17,7 @@ import type {
   UtilitiesRepository,
   UtilityReadingCreateInput,
   UtilityReadingListQuery,
+  UtilityReadingRecord,
 } from "./utilities.types.js";
 
 @Injectable()
@@ -86,13 +87,52 @@ export class UtilitiesService {
   }
 
   async createSettlement(input: SettlementInput, actorUserId?: string) {
-    const preview = await this.calculateSettlement(input);
-    const duplicate = await this.utilities.findFinalizedSettlement({
+    let preview = await this.calculateSettlement(input);
+    const duplicateSettlement = await this.utilities.findFinalizedSettlement({
       tenancyId: preview.tenancyId,
       periodStart: preview.periodStart,
       periodEnd: preview.periodEnd,
     });
-    if (duplicate) throw new FinalizedSettlementConflictException();
+    if (duplicateSettlement) throw new FinalizedSettlementConflictException();
+
+    let utilityReadingId = preview.utilityReadingId;
+    if (!utilityReadingId && input.utilityReading) {
+      const duplicateReading = await this.utilities.findFinalizedReading({
+        roomId: preview.roomId,
+        billingPeriodStart: preview.periodStart,
+        billingPeriodEnd: preview.periodEnd,
+        readingKind: input.settlementType,
+      });
+      if (duplicateReading) throw new FinalizedReadingConflictException();
+
+      const draftReading = await this.createReading(
+        {
+          roomId: preview.roomId,
+          tenancyId: preview.tenancyId,
+          readingKind: input.settlementType,
+          billingPeriodStart: preview.periodStart,
+          billingPeriodEnd: preview.periodEnd,
+          billingYear: preview.billingYear,
+          billingMonth: preview.billingMonth,
+          electricityPrevious: input.utilityReading.electricityPrevious,
+          electricityCurrent: input.utilityReading.electricityCurrent,
+          waterPrevious: input.utilityReading.waterPrevious,
+          waterCurrent: input.utilityReading.waterCurrent,
+          notes: input.notes,
+        },
+        actorUserId,
+      );
+      const finalizedReading = await this.finalizeReading(
+        draftReading.id,
+        actorUserId,
+      );
+      utilityReadingId = finalizedReading.id;
+      preview = await this.calculateSettlement({
+        ...input,
+        utilityReadingId,
+        utilityReading: undefined,
+      });
+    }
 
     const settlement = await this.utilities.createSettlement({
       settlement: {
@@ -101,7 +141,7 @@ export class UtilitiesService {
         roomId: preview.roomId,
         tenancyId: preview.tenancyId,
         representativeTenantId: preview.representativeTenantId,
-        utilityReadingId: preview.utilityReadingId,
+        utilityReadingId,
         periodStart: preview.periodStart,
         periodEnd: preview.periodEnd,
         billingYear: preview.billingYear,
@@ -170,6 +210,14 @@ export class UtilitiesService {
     input: SettlementInput,
   ): Promise<SettlementPreviewRecord> {
     const tenancy = await this.findTenancy(input.tenancyId);
+    const period = periodFor(input, tenancy);
+    const occupiedDays = inclusiveDays(period.start, period.end);
+    if (occupiedDays <= 0) {
+      throw new SettlementValidationException(
+        "Settlement period does not overlap the tenancy",
+      );
+    }
+
     const reading = input.utilityReadingId
       ? await this.utilities.findReadingById(input.utilityReadingId)
       : null;
@@ -185,22 +233,21 @@ export class UtilitiesService {
         "Utility reading must belong to the selected tenancy",
       );
     }
-
-    const period = periodFor(input, tenancy);
-    const occupiedDays = inclusiveDays(period.start, period.end);
-    if (occupiedDays <= 0) {
-      throw new SettlementValidationException(
-        "Settlement period does not overlap the tenancy",
-      );
-    }
+    const previewReading = reading
+      ? null
+      : await this.previewReadingForSettlement(input, tenancy, period);
 
     const daysInMonth = daysInMonthFor(input.billingYear, input.billingMonth);
     const rentAmount = Number(tenancy.rentAmount);
     const proratedRentAmount = Math.round(
       (rentAmount / daysInMonth) * occupiedDays,
     );
-    const electricityAmount = Number(reading?.electricityAmount ?? "0");
-    const waterAmount = Number(reading?.waterAmount ?? "0");
+    const electricityAmount = Number(
+      reading?.electricityAmount ?? previewReading?.electricityAmount ?? "0",
+    );
+    const waterAmount = Number(
+      reading?.waterAmount ?? previewReading?.waterAmount ?? "0",
+    );
     const totalAmount = proratedRentAmount + electricityAmount + waterAmount;
     const creditBalanceBefore = Number(
       await this.utilities.accountBalance({
@@ -255,6 +302,38 @@ export class UtilitiesService {
     const tenancy = tenancies.find((item) => item.id === id);
     if (!tenancy) throw new SettlementTenancyNotFoundException();
     return tenancy;
+  }
+
+  private async previewReadingForSettlement(
+    input: SettlementInput,
+    tenancy: TenancyRecord,
+    period: { start: string; end: string },
+  ): Promise<UtilityReadingRecord | null> {
+    if (!input.utilityReading) return null;
+    const priced = await this.withUtilityAmounts({
+      roomId: tenancy.roomId,
+      tenancyId: tenancy.id,
+      readingKind: input.settlementType,
+      billingPeriodStart: period.start,
+      billingPeriodEnd: period.end,
+      billingYear: input.billingYear,
+      billingMonth: input.billingMonth,
+      electricityPrevious: input.utilityReading.electricityPrevious,
+      electricityCurrent: input.utilityReading.electricityCurrent,
+      waterPrevious: input.utilityReading.waterPrevious,
+      waterCurrent: input.utilityReading.waterCurrent,
+      notes: input.notes,
+    });
+    return {
+      id: "",
+      ...priced,
+      status: "DRAFT",
+      recordedAt: new Date().toISOString(),
+      finalizedAt: null,
+      notes: input.notes ?? null,
+      createdAt: new Date().toISOString(),
+      updatedAt: new Date().toISOString(),
+    };
   }
 }
 

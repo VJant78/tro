@@ -450,6 +450,35 @@ describe("API foundation", () => {
       })
       .expect(201);
 
+    await agent
+      .post("/api/v1/settlements/preview")
+      .send({
+        tenancyId: tenancy.body.id,
+        settlementType: "MONTHLY",
+        billingYear: 2026,
+        billingMonth: 8,
+        utilityReading: {
+          electricityPrevious: "10",
+          electricityCurrent: "20",
+          waterPrevious: "1",
+          waterCurrent: "3",
+        },
+        prepaidAmount: "2000000",
+      })
+      .expect(201)
+      .expect(({ body }) => {
+        expect(body.utilityReadingId).toBeNull();
+        expect(body.electricityAmount).toBe("35000");
+        expect(body.waterAmount).toBe("30000");
+      });
+
+    await agent
+      .get(`/api/v1/utility-readings?roomId=${roomId}`)
+      .expect(200)
+      .expect(({ body }) => {
+        expect(body).toHaveLength(0);
+      });
+
     const reading = await agent
       .post("/api/v1/utility-readings")
       .send({
@@ -583,43 +612,37 @@ describe("API foundation", () => {
       .send({ actualEndDate: "2026-08-15" })
       .expect(200);
 
-    const reading = await agent
-      .post("/api/v1/utility-readings")
-      .send({
-        roomId,
-        tenancyId: tenancy.body.id,
-        readingKind: "MOVE_OUT",
-        billingPeriodStart: "2026-08-01",
-        billingPeriodEnd: "2026-08-15",
-        billingYear: 2026,
-        billingMonth: 8,
-        electricityPrevious: "0",
-        electricityCurrent: "5",
-        waterPrevious: "0",
-        waterCurrent: "1",
-      })
-      .expect(201);
     await agent
-      .post(`/api/v1/utility-readings/${reading.body.id}/finalize`)
-      .expect(201);
-
-    await agent
-      .post("/api/v1/settlements/preview")
+      .post("/api/v1/settlements")
       .send({
         tenancyId: tenancy.body.id,
         settlementType: "MOVE_OUT",
         billingYear: 2026,
         billingMonth: 8,
         periodEnd: "2026-08-15",
-        utilityReadingId: reading.body.id,
+        utilityReading: {
+          electricityPrevious: "0",
+          electricityCurrent: "5",
+          waterPrevious: "0",
+          waterCurrent: "1",
+        },
       })
       .expect(201)
       .expect(({ body }) => {
+        expect(body.status).toBe("FINALIZED");
         expect(body.periodStart).toBe("2026-08-01");
         expect(body.periodEnd).toBe("2026-08-15");
         expect(body.occupiedDays).toBe(15);
         expect(body.proratedRentAmount).toBe("1500000");
         expect(body.totalAmount).toBe("1532500");
+      });
+
+    await agent
+      .get(`/api/v1/utility-readings?roomId=${roomId}&status=FINALIZED`)
+      .expect(200)
+      .expect(({ body }) => {
+        expect(body).toHaveLength(1);
+        expect(body[0].readingKind).toBe("MOVE_OUT");
       });
   });
 });
