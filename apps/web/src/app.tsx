@@ -1,6 +1,8 @@
 import { StatusBadge } from "@repo/ui";
 import { AppShell } from "./components/app-shell";
 import { LoginPanel } from "./components/login-panel";
+import { DebtsPage } from "./debts/debts-page";
+import { InvoicesPage } from "./invoices/invoices-page";
 import { PricingPage } from "./pricing/pricing-page";
 import { RoomsPage } from "./rooms/rooms-page";
 import { TenantsPage } from "./tenants/tenants-page";
@@ -33,6 +35,10 @@ export function App() {
         <TenantsPage />
       ) : path === "/utilities" ? (
         <UtilitiesPage />
+      ) : path === "/invoices" ? (
+        <InvoicesPage />
+      ) : path === "/debts" ? (
+        <DebtsPage />
       ) : path === "/settings" ? (
         <PricingPage />
       ) : (

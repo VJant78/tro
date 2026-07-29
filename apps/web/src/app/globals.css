@@ -144,6 +144,18 @@ a {
   grid-template-columns: minmax(340px, 0.85fr) minmax(460px, 1.15fr);
 }
 
+.billing-layout {
+  display: grid;
+  gap: 20px;
+  grid-template-columns: minmax(380px, 0.9fr) minmax(520px, 1.1fr);
+}
+
+.debt-layout {
+  display: grid;
+  gap: 20px;
+  grid-template-columns: minmax(0, 1fr);
+}
+
 .pricing-stack {
   display: grid;
   gap: 12px;
@@ -165,6 +177,54 @@ a {
 
 .pricing-cell small {
   color: var(--muted);
+}
+
+.invoice-create {
+  border-bottom: 1px solid var(--border);
+  display: grid;
+  gap: 12px;
+  margin-bottom: 16px;
+  padding-bottom: 16px;
+}
+
+.invoice-facts {
+  margin-top: 18px;
+}
+
+.invoice-items {
+  display: grid;
+  gap: 10px;
+  margin-top: 18px;
+}
+
+.invoice-item-row,
+.debt-row {
+  border: 1px solid var(--border);
+  border-radius: 8px;
+}
+
+.invoice-item-row {
+  align-items: center;
+  display: flex;
+  gap: 12px;
+  justify-content: space-between;
+  padding: 12px;
+}
+
+.invoice-item-row small {
+  color: var(--muted);
+  display: block;
+  margin-top: 4px;
+}
+
+.debt-grid {
+  display: grid;
+  gap: 12px;
+  margin-top: 18px;
+}
+
+.debt-row {
+  padding: 14px;
 }
 
 .tenants-toolbar {
@@ -528,6 +588,8 @@ a {
   .tenants-layout,
   .pricing-layout,
   .utilities-layout,
+  .billing-layout,
+  .debt-layout,
   .toolbar,
   .form-grid,
   .meter-grid,

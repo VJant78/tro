@@ -43,6 +43,10 @@ export class UtilitiesService {
     return this.utilities.listSettlements(query);
   }
 
+  findSettlementById(id: string) {
+    return this.utilities.findSettlementById(id);
+  }
+
   async createReading(input: UtilityReadingCreateInput, actorUserId?: string) {
     const priced = await this.withUtilityAmounts(input);
     const reading = await this.utilities.createReading(priced);

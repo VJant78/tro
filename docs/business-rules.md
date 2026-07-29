@@ -68,6 +68,8 @@
 - Giam gia khong duoc lam tong tien cuoi nho hon 0.
 - Trang thai toi thieu: `draft`, `issued`, `partially_paid`, `paid`, `overdue`, `cancelled`.
 - Hoa don dinh ky phai idempotent va co unique constraint theo phong/tenancy/ky/loai phu hop.
+- Hoa don tao tu ky chot tien da FINALIZED dung source key `settlement:<id>` de khong tao trung.
+- Hoa don Phase 5 gom tien phong da prorate, tien dien, tien nuoc va dong giam tru tien tra truoc neu co.
 
 ## Thanh toan
 
@@ -76,12 +78,15 @@
 - Gui lai cung request khong duoc ghi nhan trung va khong tang `paidUntil` hai lan.
 - MVP co the gioi han mot payment cho mot invoice, nhung database nen co `payment_allocations` de mo rong.
 - Khong xoa cung payment; huy/hoan tac bang trang thai va audit log.
+- Thanh toan mot phan cap nhat invoice sang `partially_paid`; thanh toan du cap nhat sang `paid`.
+- Khong cho thanh toan vuot outstanding trong MVP.
 
 ## Cong no
 
 - Cong no lay tu invoice chua thanh toan het.
 - Can tach no tien phong, dien, nuoc va phi khac.
 - Muc canh bao toi thieu: sap den han, den han hom nay, qua han, qua han nghiem trong.
+- Phase 5 tong hop cong no theo phong va nguoi dai dien; detail nang cao theo tuoi no/loai phi o Phase 6.
 
 ## Audit log
 

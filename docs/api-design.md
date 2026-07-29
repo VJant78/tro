@@ -72,6 +72,17 @@
 - Proration uses actual days in the billing month. Period dates are inclusive for Phase 4 settlement UI.
 - Prepayment credit is applied only to prorated rent. Remaining credit is carried forward; remaining unpaid utility/rent amount is stored on settlement as `outstandingAmount`.
 
+### Invoices, Payments And Debts
+
+- `GET /api/v1/invoices`: protected list, supports `roomId`, `tenancyId`, `payerTenantId`, `status`.
+- `GET /api/v1/invoices/:id`: protected invoice detail with item lines and payment allocations.
+- `POST /api/v1/invoices/from-settlement`: owner/manager/staff create an issued invoice from a finalized settlement. Idempotency uses `sourceKey = settlement:<settlementId>`; repeated requests return the existing invoice.
+- Invoice item lines currently include rent, electricity, water and optional prepaid discount. Invoice total is clamped to settlement outstanding amount and cannot be negative.
+- `GET /api/v1/payments`: protected list, supports `invoiceId`, `roomId`, `payerTenantId`.
+- `POST /api/v1/payments`: owner/manager/staff create one confirmed payment for one invoice. `Idempotency-Key` header or `idempotencyKey` body prevents duplicate writes.
+- Payment creation runs in a database transaction: create payment, create allocation, update invoice `paidAmount`, `outstandingAmount` and status. Overpayment is rejected while MVP does not support advance payment outside settlement credit.
+- `GET /api/v1/debts`: protected debt summary grouped by room and payer tenant from invoices that still have outstanding amount.
+
 ## Validation
 
 - Validate body, query param va path param server-side.
@@ -140,18 +151,18 @@ Response list:
 
 `POST /api/v1/payments`
 
-- Bat buoc header `Idempotency-Key`.
+- Header `Idempotency-Key` duoc khuyen nghi; MVP cung chap nhan `idempotencyKey` trong body de de test/automation.
 - Server tu doc invoice/outstanding, khong tin tong tien tu client neu co the tinh duoc.
 - Trong transaction:
-  1. Kiem tra idempotency key va request hash.
-  2. Lock invoice lien quan.
-  3. Tao payment.
-  4. Tao payment allocation.
-  5. Cap nhat invoice status, paid amount, outstanding amount.
-  6. Neu invoice tien phong da paid du thi cap nhat hoac tinh lai `paidUntil`.
+  1. Kiem tra idempotency key.
+  2. Doc invoice lien quan.
+  3. Chan invoice da huy, da paid hoac amount vuot outstanding.
+  4. Tao payment.
+  5. Tao payment allocation.
+  6. Cap nhat invoice status, paid amount, outstanding amount.
   7. Ghi audit log.
-- Neu cung key va cung payload: tra lai response cu.
-- Neu cung key nhung payload khac: tra `409`.
+- Neu cung key duoc gui lai: tra lai payment da co, khong tao allocation moi.
+- Request-hash mismatch cho cung idempotency key la hardening future.
 
 ## Monthly utility invoice job API
 

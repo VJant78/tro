@@ -716,4 +716,147 @@ describe("API foundation", () => {
         expect(body[0].readingKind).toBe("MOVE_OUT");
       });
   });
+
+  it("creates invoices from settlements and allocates idempotent payments", async () => {
+    const agent = request.agent(app.getHttpServer());
+
+    await agent
+      .post("/api/v1/auth/login")
+      .send({ email: "owner@example.local", password: "ChangeMe123!" })
+      .expect(201);
+
+    const room = await agent
+      .post("/api/v1/rooms")
+      .send({
+        code: "BILL-501",
+        name: "Phong billing 501",
+        defaultRentAmount: "3000000",
+        maxOccupants: 2,
+      })
+      .expect(201);
+
+    const tenant = await agent
+      .post("/api/v1/tenants")
+      .send({
+        fullName: "Nguoi Thanh Toan",
+        phone: "0930000001",
+        identityNumber: "062345678901",
+      })
+      .expect(201);
+
+    const tenancy = await agent
+      .post("/api/v1/tenancies")
+      .send({
+        roomId: room.body.id,
+        representativeTenantId: tenant.body.id,
+        startDate: "2026-09-01",
+        rentAmount: "3000000",
+      })
+      .expect(201);
+
+    const settlement = await agent
+      .post("/api/v1/settlements")
+      .send({
+        tenancyId: tenancy.body.id,
+        settlementType: "MONTHLY",
+        billingYear: 2026,
+        billingMonth: 9,
+        utilityReading: {
+          electricityPrevious: "0",
+          electricityCurrent: "10",
+          waterPrevious: "0",
+          waterCurrent: "2",
+        },
+      })
+      .expect(201);
+
+    const invoice = await agent
+      .post("/api/v1/invoices/from-settlement")
+      .send({ settlementId: settlement.body.id })
+      .expect(201);
+
+    expect(invoice.body.status).toBe("ISSUED");
+    expect(invoice.body.sourceKey).toBe(`settlement:${settlement.body.id}`);
+    expect(invoice.body.totalAmount).toBe(settlement.body.outstandingAmount);
+    expect(
+      invoice.body.items.map((item: { itemType: string }) => item.itemType),
+    ).toContain("RENT");
+
+    await agent
+      .post("/api/v1/invoices/from-settlement")
+      .send({ settlementId: settlement.body.id })
+      .expect(201)
+      .expect(({ body }) => {
+        expect(body.id).toBe(invoice.body.id);
+      });
+
+    await agent
+      .post("/api/v1/payments")
+      .set("Idempotency-Key", "payment-key-bill-501")
+      .send({
+        invoiceId: invoice.body.id,
+        amount: "1000000",
+        method: "CASH",
+      })
+      .expect(201)
+      .expect(({ body }) => {
+        expect(body.amount).toBe("1000000");
+        expect(body.status).toBe("CONFIRMED");
+      });
+
+    await agent
+      .post("/api/v1/payments")
+      .set("Idempotency-Key", "payment-key-bill-501")
+      .send({
+        invoiceId: invoice.body.id,
+        amount: "1000000",
+        method: "CASH",
+      })
+      .expect(201)
+      .expect(({ body }) => {
+        expect(body.idempotencyKey).toBe("payment-key-bill-501");
+      });
+
+    const partiallyPaid = await agent
+      .get(`/api/v1/invoices/${invoice.body.id}`)
+      .expect(200);
+    expect(partiallyPaid.body.status).toBe("PARTIALLY_PAID");
+    expect(partiallyPaid.body.outstandingAmount).toBe(
+      String(Number(invoice.body.totalAmount) - 1000000),
+    );
+
+    await agent
+      .get(`/api/v1/debts?roomId=${room.body.id}`)
+      .expect(200)
+      .expect(({ body }) => {
+        expect(body).toHaveLength(1);
+        expect(body[0].totalOutstanding).toBe(
+          partiallyPaid.body.outstandingAmount,
+        );
+      });
+
+    await agent
+      .post("/api/v1/payments")
+      .send({
+        invoiceId: invoice.body.id,
+        amount: partiallyPaid.body.outstandingAmount,
+        method: "BANK_TRANSFER",
+      })
+      .expect(201);
+
+    await agent
+      .get(`/api/v1/invoices/${invoice.body.id}`)
+      .expect(200)
+      .expect(({ body }) => {
+        expect(body.status).toBe("PAID");
+        expect(body.outstandingAmount).toBe("0");
+      });
+
+    await agent
+      .get(`/api/v1/debts?roomId=${room.body.id}`)
+      .expect(200)
+      .expect(({ body }) => {
+        expect(body).toHaveLength(0);
+      });
+  });
 });

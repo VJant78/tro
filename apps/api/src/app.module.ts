@@ -2,6 +2,7 @@ import { Module } from "@nestjs/common";
 import { APP_FILTER, APP_GUARD, APP_INTERCEPTOR } from "@nestjs/core";
 import { AuditModule } from "./audit/audit.module.js";
 import { AuthModule } from "./auth/auth.module.js";
+import { BillingModule } from "./billing/billing.module.js";
 import { HealthController } from "./health/health.controller.js";
 import { ApiExceptionFilter } from "./platform/api-exception.filter.js";
 import { RequestContextInterceptor } from "./platform/request-context.interceptor.js";
@@ -19,6 +20,7 @@ import { UtilitiesModule } from "./utilities/utilities.module.js";
     TenantsModule,
     PricingModule,
     UtilitiesModule,
+    BillingModule,
   ],
   controllers: [HealthController],
   providers: [

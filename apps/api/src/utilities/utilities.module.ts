@@ -22,5 +22,6 @@ import { UTILITIES_REPOSITORY } from "./utilities.tokens.js";
           : PrismaUtilitiesRepository,
     },
   ],
+  exports: [UtilitiesService],
 })
 export class UtilitiesModule {}

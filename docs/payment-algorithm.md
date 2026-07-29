@@ -4,6 +4,8 @@
 
 `PaymentPeriodCalculator` tinh moc `paidUntil` moi cho tien phong khi invoice tien phong da duoc thanh toan du. Service khong tu quyet dinh invoice da du tien hay chua; no chi nhan dau vao hop le tu payment/invoice service.
 
+Phase 5 da co implementation thuần tại API billing domain cho daily, weekly, monthly anchor va boundary partial/paid invoice. Viec cap nhat `rentPaidUntil` vao Room/Tenancy record se duoc noi vao flow rent-invoice nang cao khi co yeu cau tach invoice tien phong theo chu ky.
+
 ## Date convention
 
 - `paidUntil` la moc exclusive.
