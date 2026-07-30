@@ -23,4 +23,4 @@ ENV NODE_ENV=production
 
 EXPOSE 4000
 
-CMD ["sh", "-c", "npx prisma migrate deploy --schema packages/database/prisma/schema.prisma && node apps/api/dist/server.js"]
+CMD ["sh", "-c", "cd packages/database && npx prisma migrate deploy --schema prisma/schema.prisma && cd /app && node apps/api/dist/server.js"]

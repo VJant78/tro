@@ -25,7 +25,7 @@ services:
     environment:
       BUSINESS_TIMEZONE: Asia/Bangkok
       DATABASE_URL: postgresql://tro:tro@postgres:5432/tro
-      NODE_ENV: production
+      NODE_ENV: development
       PORT: 4000
       RECEIPT_PREVIEW_SECRET: change-me-local-receipt-secret
       SESSION_SECRET: change-me-local-session-secret
