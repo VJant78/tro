@@ -8,6 +8,16 @@ import { runWithRequestContext } from "./platform/request-context.js";
 
 const apiPrefix = "/api/v1";
 
+function corsOrigins() {
+  const configured = process.env.CORS_ORIGINS?.split(",")
+    .map((origin) => origin.trim())
+    .filter(Boolean);
+
+  return configured?.length
+    ? configured
+    : [/^http:\/\/localhost:\d+$/, /^http:\/\/127\.0\.0\.1:\d+$/];
+}
+
 export async function createApiApp() {
   const app = await NestFactory.create(AppModule, { bufferLogs: true });
 
@@ -18,7 +28,7 @@ export async function createApiApp() {
     runWithRequestContext({ requestId }, next);
   });
   app.enableCors({
-    origin: [/^http:\/\/localhost:\d+$/, /^http:\/\/127\.0\.0\.1:\d+$/],
+    origin: corsOrigins(),
     credentials: true,
   });
   app.setGlobalPrefix(apiPrefix.replace(/^\//, ""));
