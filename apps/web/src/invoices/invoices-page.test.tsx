@@ -57,43 +57,62 @@ const invoice = {
       unitPrice: "96774",
       amount: "3000000",
       sortOrder: 10,
+      utilityUsage: null,
+      utilityUsageSource: null,
+    },
+    {
+      id: "item-electricity",
+      invoiceId: "00000000-0000-4000-8000-000000000902",
+      itemType: "ELECTRICITY",
+      description: "Tiền điện",
+      quantity: "17",
+      unit: "kWh",
+      unitPrice: "3500",
+      amount: "59500",
+      sortOrder: 20,
+      utilityUsage: {
+        previous: "125",
+        current: "142",
+        usage: "17",
+        unit: "kWh",
+        unitPrice: "3500",
+        amount: "59500",
+      },
+      utilityUsageSource: "INVOICE_SNAPSHOT",
+    },
+    {
+      id: "item-water",
+      invoiceId: "00000000-0000-4000-8000-000000000902",
+      itemType: "WATER",
+      description: "Tiền nước",
+      quantity: "4",
+      unit: "m3",
+      unitPrice: "7500",
+      amount: "30000",
+      sortOrder: 30,
+      utilityUsage: null,
+      utilityUsageSource: null,
     },
   ],
 };
 
 describe("InvoicesPage", () => {
   beforeEach(() => {
+    window.history.replaceState({}, "", "/invoices");
+    vi.spyOn(window, "confirm").mockReturnValue(true);
+    vi.spyOn(window, "print").mockImplementation(() => undefined);
     vi.spyOn(globalThis, "fetch").mockImplementation(async (input, init) => {
       const url = String(input);
       const method = init?.method ?? "GET";
 
-      if (url.endsWith("/settlements")) return jsonResponse([settlement]);
       if (url.endsWith("/invoices") && method === "GET") {
         return jsonResponse([invoice]);
       }
-      if (url.includes("/rooms?")) {
-        return jsonResponse({
-          data: [
-            {
-              id: settlement.roomId,
-              code: "A-101",
-              name: "Phong A101",
-              roomType: null,
-              status: "OCCUPIED",
-              defaultRentAmount: "3000000",
-              defaultBillingCycleType: "MONTHLY",
-              defaultBillingCycleCount: 1,
-              maxOccupants: 2,
-              depositAmount: "0",
-              notes: null,
-              currentOccupancy: null,
-            },
-          ],
-          page: { limit: 100, nextCursor: null, hasMore: false },
-        });
+      if (url.endsWith("/auth/me") && method === "GET") {
+        return jsonResponse({ role: "OWNER" });
       }
-      if (url.endsWith("/invoices/from-settlement")) {
-        return jsonResponse(invoice, 201);
+      if (url.endsWith(`/invoices/${invoice.id}`) && method === "GET") {
+        return jsonResponse(invoice);
       }
       if (url.endsWith("/payments")) {
         return jsonResponse(
@@ -117,26 +136,38 @@ describe("InvoicesPage", () => {
     vi.restoreAllMocks();
   });
 
-  it("creates an invoice from a finalized settlement and records payment", async () => {
+  it("shows issued invoices without manual creation and records payment", async () => {
     const user = userEvent.setup();
     render(<InvoicesPage />);
 
-    expect(await screen.findAllByText("INV-20260831-ABC")).toHaveLength(2);
+    expect(await screen.findAllByText("INV-20260831-ABC")).toHaveLength(3);
+    expect(screen.getByText("Tiền phòng tháng 8/2026")).toBeInTheDocument();
+    expect(screen.queryByText("96.774 VND")).not.toBeInTheDocument();
     expect(
-      screen.getByText("Phong A-101 - 1/8/2026 den 31/8/2026"),
+      screen.getByLabelText(
+        /Tiền điện, chỉ số cũ 125 kWh, chỉ số mới 142 kWh, đã dùng 17 kWh/,
+      ),
     ).toBeInTheDocument();
-    await user.click(screen.getByRole("button", { name: "Tao hoa don" }));
-    await waitFor(() => {
-      expect(globalThis.fetch).toHaveBeenCalledWith(
-        expect.stringContaining("/invoices/from-settlement"),
-        expect.objectContaining({ method: "POST" }),
-      );
-    });
+    expect(screen.getByText("3.500 VND")).toBeInTheDocument();
+    expect(
+      screen.getByText("Chưa có đủ chỉ số để đối chiếu"),
+    ).toBeInTheDocument();
+    expect(
+      screen.queryByRole("button", { name: /Tạo hóa đơn/ }),
+    ).not.toBeInTheDocument();
+    expect(globalThis.fetch).not.toHaveBeenCalledWith(
+      expect.stringContaining("/invoices/from-settlement"),
+      expect.anything(),
+    );
 
-    await user.clear(screen.getByLabelText("So tien thu"));
-    await user.type(screen.getByLabelText("So tien thu"), "1000000");
+    await user.click(screen.getByRole("button", { name: "In hóa đơn" }));
+    expect(window.print).toHaveBeenCalledOnce();
+
+    await waitFor(() => {
+      expect(screen.getByLabelText(/Số tiền thu/)).toHaveValue("3065000");
+    });
     await user.click(
-      screen.getByRole("button", { name: "Ghi nhan thanh toan" }),
+      screen.getByRole("button", { name: "Ghi nhận thanh toán" }),
     );
     await waitFor(() => {
       expect(globalThis.fetch).toHaveBeenCalledWith(
@@ -144,6 +175,64 @@ describe("InvoicesPage", () => {
         expect.objectContaining({ method: "POST" }),
       );
     });
+  });
+
+  it("clears the previous detail when an exact invoice deep-link fails", async () => {
+    const inaccessibleInvoice = {
+      ...invoice,
+      id: "00000000-0000-4000-8000-000000000999",
+      invoiceNumber: "INV-NOT-AVAILABLE",
+    };
+    vi.mocked(globalThis.fetch).mockImplementation(async (input) => {
+      const url = String(input);
+      if (url.endsWith("/invoices")) {
+        return jsonResponse([invoice, inaccessibleInvoice]);
+      }
+      if (url.endsWith("/auth/me")) {
+        return jsonResponse({ role: "OWNER" });
+      }
+      if (url.endsWith(`/invoices/${invoice.id}`)) {
+        return jsonResponse(invoice);
+      }
+      return jsonResponse({ error: { message: "Not found" } }, 404);
+    });
+    const user = userEvent.setup();
+    render(<InvoicesPage />);
+
+    expect(
+      await screen.findByText("Tiền phòng tháng 8/2026"),
+    ).toBeInTheDocument();
+    await user.click(screen.getByRole("button", { name: /INV-NOT-AVAILABLE/ }));
+
+    expect(
+      await screen.findByText("Không tải được chi tiết hóa đơn."),
+    ).toBeInTheDocument();
+    expect(
+      screen.queryByText("Tiền phòng tháng 8/2026"),
+    ).not.toBeInTheDocument();
+  });
+
+  it("does not show payment mutation controls to a viewer", async () => {
+    vi.mocked(globalThis.fetch).mockImplementation(async (input) => {
+      const url = String(input);
+      if (url.endsWith("/invoices")) return jsonResponse([invoice]);
+      if (url.endsWith("/auth/me")) return jsonResponse({ role: "VIEWER" });
+      if (url.endsWith(`/invoices/${invoice.id}`)) return jsonResponse(invoice);
+      return jsonResponse({ error: { message: "Not found" } }, 404);
+    });
+
+    render(<InvoicesPage />);
+
+    expect(
+      await screen.findByText("Tiền phòng tháng 8/2026"),
+    ).toBeInTheDocument();
+    expect(
+      screen.getByRole("button", { name: "In hóa đơn" }),
+    ).toBeInTheDocument();
+    expect(screen.queryByLabelText(/Số tiền thu/)).not.toBeInTheDocument();
+    expect(
+      screen.queryByRole("button", { name: "Ghi nhận thanh toán" }),
+    ).not.toBeInTheDocument();
   });
 });
 

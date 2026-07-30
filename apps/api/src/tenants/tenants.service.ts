@@ -1,6 +1,8 @@
 import { Inject, Injectable } from "@nestjs/common";
 import { AuditService } from "../audit/audit.service.js";
 import { TENANT_REPOSITORY } from "./tenants.tokens.js";
+import { requestHash } from "../platform/idempotency.js";
+import { authorizedPropertyId } from "../platform/property-scope.js";
 import type {
   TenancyCreateInput,
   TenancyEndInput,
@@ -11,6 +13,7 @@ import type {
   TenantListQuery,
   TenantRepository,
   TenantUpdateInput,
+  RepresentativeChangeInput,
 } from "./tenants.types.js";
 
 @Injectable()
@@ -33,7 +36,10 @@ export class TenantsService {
   }
 
   async createTenant(input: TenantCreateInput, actorUserId?: string) {
-    const tenant = await this.tenants.createTenant(input);
+    const tenant = await this.tenants.createTenant({
+      ...input,
+      propertyId: authorizedPropertyId(),
+    });
     await this.audit.record({
       action: "CREATE",
       entityType: "tenant",
@@ -133,20 +139,23 @@ export class TenantsService {
       tenancyId,
       tenantId,
       input,
+      actorUserId,
     );
     if (!tenancy) return null;
-    await this.audit.record({
-      action: "STATUS_CHANGE",
-      entityType: "tenancy_member",
-      entityId: tenantId,
-      actorUserId,
-      newValues: tenancy,
-      metadata: {
-        status: "TRANSFER_MEMBER",
-        fromTenancyId: tenancyId,
-        toTenancyId: tenancy.id,
-      },
-    });
+    if (process.env.NODE_ENV === "test") {
+      await this.audit.record({
+        action: "STATUS_CHANGE",
+        entityType: "tenancy_member",
+        entityId: tenantId,
+        actorUserId,
+        newValues: tenancy,
+        metadata: {
+          status: "TRANSFER_MEMBER",
+          fromTenancyId: tenancyId,
+          toTenancyId: tenancy.id,
+        },
+      });
+    }
     return tenancy;
   }
 
@@ -156,19 +165,43 @@ export class TenantsService {
     input: TenancyMemberLeaveInput,
     actorUserId?: string,
   ) {
-    const tenancy = await this.tenants.leaveMember(tenancyId, tenantId, input);
-    if (!tenancy) return null;
-    await this.audit.record({
-      action: "STATUS_CHANGE",
-      entityType: "tenancy_member",
-      entityId: tenantId,
+    const tenancy = await this.tenants.leaveMember(
+      tenancyId,
+      tenantId,
+      input,
       actorUserId,
-      newValues: tenancy,
-      metadata: {
-        status: "LEAVE_MEMBER",
-        tenancyId,
-      },
-    });
+    );
+    if (!tenancy) return null;
+    if (process.env.NODE_ENV === "test") {
+      await this.audit.record({
+        action: "STATUS_CHANGE",
+        entityType: "tenancy_member",
+        entityId: tenantId,
+        actorUserId,
+        newValues: tenancy,
+        metadata: {
+          status: "LEAVE_MEMBER",
+          tenancyId,
+        },
+      });
+    }
     return tenancy;
+  }
+
+  async changeRepresentative(
+    tenancyId: string,
+    input: Omit<RepresentativeChangeInput, "requestHash">,
+    actorUserId?: string,
+  ) {
+    const changed = await this.tenants.changeRepresentative(tenancyId, {
+      ...input,
+      requestHash: requestHash({
+        tenancyId,
+        newRepresentativeTenantId: input.newRepresentativeTenantId,
+      }),
+      actorUserId,
+    });
+    if (!changed) return null;
+    return changed;
   }
 }

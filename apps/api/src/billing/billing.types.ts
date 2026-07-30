@@ -14,8 +14,22 @@ export type InvoiceItemType =
   | "PREVIOUS_DEBT";
 export type PaymentMethod = "CASH" | "BANK_TRANSFER" | "OTHER";
 export type PaymentStatus = "PENDING" | "CONFIRMED" | "VOIDED" | "REFUNDED";
+export type PaymentSourceType =
+  "LEGACY_INVOICE" | "DAILY_RECEIPT" | "LEGACY_PREPAYMENT";
 export type DebtStatus =
   "OUTSTANDING" | "PARTIALLY_PAID" | "DUE_TODAY" | "OVERDUE";
+
+export interface UtilityUsageRecord {
+  previous: string;
+  current: string;
+  usage: string;
+  unit: "kWh" | "m3";
+  unitPrice: string;
+  amount: string;
+}
+
+export type UtilityUsageSource =
+  "INVOICE_SNAPSHOT" | "LEGACY_FINALIZED_READING";
 
 export interface InvoiceItemRecord {
   id: string;
@@ -87,7 +101,10 @@ export interface PaymentRecord {
   amount: string;
   method: PaymentMethod;
   status: PaymentStatus;
+  sourceType: PaymentSourceType;
   paidAt: string;
+  voidedAt: string | null;
+  voidReason: string | null;
   idempotencyKey: string | null;
   description: string | null;
   notes: string | null;
@@ -103,6 +120,7 @@ export interface InvoiceListQuery {
   status?: InvoiceStatus;
   billingYear?: number;
   billingMonth?: number;
+  limit?: number;
 }
 
 export interface PaymentListQuery {
@@ -111,6 +129,8 @@ export interface PaymentListQuery {
   payerTenantId?: string;
   paidFrom?: string;
   paidTo?: string;
+  eventFrom?: string;
+  eventTo?: string;
 }
 
 export interface DebtListQuery {
@@ -173,6 +193,8 @@ export interface PaymentCreateInput {
   method: PaymentMethod;
   paidAt: string;
   idempotencyKey?: string | null;
+  requestHash: string;
+  actorUserId?: string;
   description?: string | null;
   notes?: string | null;
 }
@@ -186,13 +208,75 @@ export interface BillingRepository {
   listInvoices(query: InvoiceListQuery): Promise<InvoiceRecord[]>;
   findInvoiceById(id: string): Promise<InvoiceRecord | null>;
   findInvoiceBySourceKey(sourceKey: string): Promise<InvoiceRecord | null>;
-  createInvoice(input: InvoiceCreateInput): Promise<InvoiceRecord>;
+  createInvoice(
+    input: InvoiceCreateInput,
+    actorUserId?: string,
+  ): Promise<InvoiceRecord>;
   listPayments(query: PaymentListQuery): Promise<PaymentRecord[]>;
-  findPaymentByIdempotencyKey(
-    idempotencyKey: string,
-  ): Promise<PaymentRecord | null>;
   createPayment(input: PaymentCreateInput): Promise<PaymentCreateResult>;
   listDebts(query: DebtListQuery): Promise<DebtSummaryRecord[]>;
+}
+
+export interface InvoiceItemReadRecord {
+  id: string;
+  itemType: InvoiceItemType;
+  description: string;
+  quantity: string;
+  unit: string | null;
+  unitPrice: string;
+  amount: string;
+  sortOrder: number;
+  utilityUsage: UtilityUsageRecord | null;
+  utilityUsageSource: UtilityUsageSource | null;
+}
+
+export interface InvoiceReadRecord {
+  id: string;
+  invoiceNumber: string;
+  roomId: string;
+  roomCode: string | null;
+  payerTenantName: string | null;
+  invoiceType: InvoiceType;
+  status: InvoiceStatus;
+  billingPeriodStart: string;
+  billingPeriodEnd: string;
+  billingYear: number;
+  billingMonth: number | null;
+  issuedOn: string | null;
+  dueOn: string;
+  totalAmount: string;
+  paidAmount: string;
+  outstandingAmount: string;
+  fullyPaidAt: string | null;
+  items: InvoiceItemReadRecord[];
+  paymentAllocations: Array<{
+    amount: string;
+    allocatedAt: string;
+    paymentNumber: string | null;
+    paymentMethod: PaymentMethod | null;
+    paymentStatus: PaymentStatus | null;
+    paidAt: string | null;
+  }>;
+}
+
+export interface PaymentReadRecord {
+  id: string;
+  paymentNumber: string;
+  roomId: string;
+  roomCode: string | null;
+  payerTenantName: string | null;
+  amount: string;
+  method: PaymentMethod;
+  status: PaymentStatus;
+  paidAt: string;
+  voidedAt: string | null;
+}
+
+export interface DebtSummaryReadRecord extends Omit<
+  DebtSummaryRecord,
+  "invoices"
+> {
+  invoices: InvoiceReadRecord[];
 }
 
 export interface DashboardSummaryRecord {
@@ -220,6 +304,35 @@ export interface DashboardSummaryRecord {
   }>;
 }
 
+export type DashboardActionKind =
+  | "UNSETTLED_PERIOD"
+  | "INVOICE_PENDING"
+  | "ACTION_REQUIRED"
+  | "DUE_SOON"
+  | "DUE_TODAY"
+  | "OVERDUE";
+
+export interface DashboardActionRecord {
+  id: string;
+  kind: DashboardActionKind;
+  roomId: string;
+  roomCode: string | null;
+  periodStart: string | null;
+  periodEnd: string | null;
+  dueOn: string | null;
+  amount: string | null;
+  target: {
+    route: "/utilities" | "/invoices";
+    params: Record<string, string>;
+  };
+}
+
+export interface DashboardActionsRecord {
+  asOf: string;
+  dueSoonDays: 3;
+  items: DashboardActionRecord[];
+}
+
 export interface MonthlyReportRecord {
   billingYear: number;
   billingMonth: number;
@@ -229,11 +342,16 @@ export interface MonthlyReportRecord {
     invoiceTotal: string;
     collected: string;
     outstanding: string;
+    grossBilled: string;
+    cashReceived: string;
+    cashReversed: string;
+    creditApplied: string;
+    netOutstanding: string;
     overdue: string;
     electricity: string;
     water: string;
   };
-  invoices: InvoiceRecord[];
-  payments: PaymentRecord[];
-  debts: DebtSummaryRecord[];
+  invoices: InvoiceReadRecord[];
+  payments: PaymentReadRecord[];
+  debts: DebtSummaryReadRecord[];
 }

@@ -1,10 +1,12 @@
 import { useEffect, useState } from "react";
 import { StatusBadge } from "@repo/ui";
-import { ApiError, apiFetch } from "../api";
-import type { DashboardSummary } from "../billing/types";
+import { apiFetch, messageFor } from "../api";
+import type { DashboardAction, DashboardSummary } from "../billing/types";
+import { formatDate, formatMoney } from "../format";
 
 export function DashboardPage() {
   const [summary, setSummary] = useState<DashboardSummary | null>(null);
+  const [actions, setActions] = useState<DashboardAction[]>([]);
   const [error, setError] = useState<string | null>(null);
   const [isLoading, setIsLoading] = useState(true);
 
@@ -13,7 +15,23 @@ export function DashboardPage() {
       setIsLoading(true);
       setError(null);
       try {
-        setSummary(await apiFetch<DashboardSummary>("/dashboard/summary"));
+        const [summaryResponse, actionResponse] = await Promise.all([
+          apiFetch<DashboardSummary>("/dashboard/summary"),
+          apiFetch<
+            | DashboardAction[]
+            | { data?: DashboardAction[]; items?: DashboardAction[] }
+          >("/dashboard/actions"),
+        ]);
+        setSummary(summaryResponse);
+        setActions(
+          Array.isArray(actionResponse)
+            ? actionResponse
+            : Array.isArray(actionResponse?.data)
+              ? actionResponse.data
+              : Array.isArray(actionResponse?.items)
+                ? actionResponse.items
+                : [],
+        );
       } catch (loadError) {
         setError(messageFor(loadError));
       } finally {
@@ -27,25 +45,30 @@ export function DashboardPage() {
     <>
       <div className="section-heading">
         <div>
-          <h1>Dashboard</h1>
+          <h1>Tổng quan</h1>
           <p>
             {summary
-              ? `Thang ${summary.billingMonth}/${summary.billingYear}`
-              : "Tong quan van hanh"}
+              ? `Tháng ${summary.billingMonth}/${summary.billingYear}`
+              : "Việc cần làm và tình hình thu tiền"}
           </p>
         </div>
         {summary ? (
-          <StatusBadge
-            tone={summary.needsAttention.length > 0 ? "warning" : "success"}
-          >
-            {summary.needsAttention.length > 0 ? "Can chu y" : "On dinh"}
+          <StatusBadge tone={actions.length > 0 ? "warning" : "success"}>
+            {actions.length > 0 ? "Cần xử lý" : "Ổn định"}
           </StatusBadge>
         ) : null}
       </div>
 
       {error ? (
         <div className="notice error" role="alert">
-          {error}
+          <span>{error}</span>
+          <button
+            className="ui-button ui-button-secondary"
+            onClick={() => window.location.reload()}
+            type="button"
+          >
+            Thử lại
+          </button>
         </div>
       ) : null}
 
@@ -59,58 +82,66 @@ export function DashboardPage() {
       ) : summary ? (
         <>
           <div className="metric-grid">
-            <Metric label="Tong phong" value={String(summary.totals.rooms)} />
+            <Metric label="Tổng phòng" value={String(summary.totals.rooms)} />
             <Metric
-              label="Dang thue"
+              label="Đang thuê"
               value={String(summary.totals.occupiedRooms)}
             />
             <Metric
-              label="Can thu thang nay"
+              label="Cần thu tháng này"
               value={formatMoney(summary.totals.currentMonthCollectable)}
             />
             <Metric
-              label="Da thu thang nay"
+              label="Đã thu tháng này"
               value={formatMoney(summary.totals.currentMonthCollected)}
             />
             <Metric
-              label="Con thu thang nay"
+              label="Còn thu tháng này"
               value={formatMoney(summary.totals.currentMonthOutstanding)}
             />
             <Metric
-              label="Hoa don qua han"
+              label="Hóa đơn quá hạn"
               value={String(summary.totals.overdueInvoiceCount)}
             />
             <Metric
-              label="Tien qua han"
+              label="Tiền quá hạn"
               value={formatMoney(summary.totals.overdueAmount)}
             />
           </div>
 
           <section className="panel" aria-labelledby="attention-title">
             <div className="section-heading compact">
-              <h2 id="attention-title">Can chu y</h2>
+              <div>
+                <h2 id="attention-title">Việc cần làm</h2>
+                <p>Ưu tiên các kỳ chưa chốt và khoản sắp đến hạn.</p>
+              </div>
             </div>
-            {summary.needsAttention.length === 0 ? (
+            {actions.length === 0 ? (
               <div className="empty-state">
-                <strong>Khong co canh bao</strong>
+                <strong>Không có việc tồn đọng</strong>
               </div>
             ) : (
-              <div className="invoice-items">
-                {summary.needsAttention.map((item) => (
-                  <div
-                    className="invoice-item-row"
-                    key={`${item.roomId}-${item.payerTenantId}`}
-                  >
+              <div className="action-queue">
+                {actions.map((item) => (
+                  <div className="action-row" key={item.id}>
                     <span>
-                      <strong>
-                        Phong {item.roomCode ?? item.roomId.slice(0, 8)}
-                      </strong>
-                      <small>
-                        {item.payerTenantName ?? "Nguoi dai dien"} - qua han{" "}
-                        {item.daysOverdue} ngay
-                      </small>
+                      <StatusBadge tone={actionTone(item.kind)}>
+                        {actionLabel(item.kind)}
+                      </StatusBadge>
+                      <strong>Phòng {item.roomCode ?? "-"}</strong>
+                      <small>{actionContext(item)}</small>
                     </span>
-                    <strong>{formatMoney(item.totalOutstanding)}</strong>
+                    <span className="action-row-end">
+                      {item.amount ? (
+                        <strong>{formatMoney(item.amount)}</strong>
+                      ) : null}
+                      <a
+                        className="ui-button ui-button-secondary"
+                        href={targetUrl(item)}
+                      >
+                        Xử lý
+                      </a>
+                    </span>
                   </div>
                 ))}
               </div>
@@ -131,12 +162,41 @@ function Metric({ label, value }: { label: string; value: string }) {
   );
 }
 
-function formatMoney(value: string | number) {
-  return new Intl.NumberFormat("vi-VN").format(Number(value)) + " VND";
+function actionTone(
+  kind: DashboardAction["kind"],
+): "neutral" | "warning" | "danger" {
+  return kind === "OVERDUE"
+    ? "danger"
+    : kind === "DUE_TODAY" ||
+        kind === "INVOICE_PENDING" ||
+        kind === "ACTION_REQUIRED"
+      ? "warning"
+      : "neutral";
 }
 
-function messageFor(error: unknown) {
-  if (error instanceof ApiError) return error.message;
-  if (error instanceof Error) return error.message;
-  return "Co loi xay ra";
+function actionLabel(kind: DashboardAction["kind"]) {
+  return (
+    {
+      UNSETTLED_PERIOD: "Chưa chốt kỳ",
+      INVOICE_PENDING: "Chưa có hóa đơn",
+      ACTION_REQUIRED: "Cần kiểm tra",
+      DUE_SOON: "Sắp đến hạn",
+      DUE_TODAY: "Đến hạn hôm nay",
+      OVERDUE: "Quá hạn",
+    } satisfies Record<DashboardAction["kind"], string>
+  )[kind];
+}
+
+function actionContext(item: DashboardAction) {
+  if (item.periodStart && item.periodEnd) {
+    return `Kỳ ${formatDate(item.periodStart)} - ${formatDate(item.periodEnd)}`;
+  }
+  if (item.dueOn) return `Hạn thu ${formatDate(item.dueOn)}`;
+  return item.reason ?? "Mở để xử lý";
+}
+
+function targetUrl(item: DashboardAction) {
+  const params = new URLSearchParams(item.target.params ?? {});
+  const query = params.toString();
+  return `${item.target.route}${query ? `?${query}` : ""}`;
 }

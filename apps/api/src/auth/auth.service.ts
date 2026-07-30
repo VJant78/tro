@@ -7,6 +7,8 @@ import {
 import { AuditService } from "../audit/audit.service.js";
 import type { LoginInput } from "./auth.schemas.js";
 import { SessionService } from "./session.service.js";
+import { DomainException } from "../platform/domain.exception.js";
+import { DEFAULT_PROPERTY_ID } from "../platform/property-scope.js";
 
 const devOwner = {
   id: "00000000-0000-4000-8000-000000000001",
@@ -33,12 +35,17 @@ export class AuthService {
       input.email !== devOwner.email ||
       input.password !== devOwner.password
     ) {
-      throw new UnauthorizedException("Invalid credentials");
+      throw new DomainException(
+        "INVALID_CREDENTIALS",
+        "Invalid credentials",
+        401,
+      );
     }
 
     const session = await this.sessionService.createSession({
       userId: devOwner.id,
       role: devOwner.role,
+      propertyId: DEFAULT_PROPERTY_ID,
     });
 
     await this.auditService.record({
@@ -55,7 +62,20 @@ export class AuthService {
         id: devOwner.id,
         email: devOwner.email,
         role: devOwner.role,
+        propertyId: DEFAULT_PROPERTY_ID,
       },
     };
+  }
+
+  async logout(sessionToken: string | undefined, actorUserId?: string) {
+    const session = await this.sessionService.revokeSessionToken(sessionToken);
+    await this.auditService.record({
+      action: "DELETE",
+      entityType: "session",
+      entityId: session?.sessionId ?? "current",
+      actorUserId,
+      metadata: { reason: "logout", revoked: Boolean(session) },
+    });
+    return { loggedOut: true };
   }
 }

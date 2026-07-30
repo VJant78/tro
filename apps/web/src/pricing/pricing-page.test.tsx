@@ -69,12 +69,12 @@ describe("PricingPage", () => {
     const user = userEvent.setup();
     render(<PricingPage />);
 
-    expect(await screen.findByText("Dang ap dung")).toBeInTheDocument();
-    expect(screen.getByText("3500")).toBeInTheDocument();
+    expect(await screen.findByText("Đang áp dụng")).toBeInTheDocument();
+    expect(screen.getAllByText("3.500 VND/kWh")).toHaveLength(2);
 
-    await user.clear(screen.getByLabelText("Gia dien"));
-    await user.type(screen.getByLabelText("Gia dien"), "4200");
-    await user.click(screen.getByRole("button", { name: "Luu cau hinh" }));
+    await user.clear(screen.getByLabelText(/Giá điện/));
+    await user.type(screen.getByLabelText(/Giá điện/), "4200");
+    await user.click(screen.getByRole("button", { name: "Lưu cấu hình" }));
 
     await waitFor(() => {
       expect(globalThis.fetch).toHaveBeenCalledWith(

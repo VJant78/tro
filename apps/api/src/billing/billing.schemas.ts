@@ -1,11 +1,7 @@
 import { z } from "zod";
+import { positiveMoneySchema } from "../platform/numeric.js";
 
 const uuidSchema = z.uuid();
-const moneySchema = z
-  .union([z.string(), z.number()])
-  .transform((value) => String(value).trim())
-  .refine((value) => /^\d+$/.test(value), "Must be a non-negative integer")
-  .refine((value) => Number(value) > 0, "Must be greater than zero");
 
 export const invoiceStatusSchema = z.enum([
   "DRAFT",
@@ -31,8 +27,9 @@ export const invoiceListQuerySchema = z
     status: invoiceStatusSchema.optional(),
     billingYear: z.coerce.number().int().min(2000).max(2100).optional(),
     billingMonth: z.coerce.number().int().min(1).max(12).optional(),
+    limit: z.coerce.number().int().min(1).max(200).default(100),
   })
-  .default({});
+  .default({ limit: 100 });
 
 export const fromSettlementSchema = z.object({
   settlementId: uuidSchema,
@@ -40,9 +37,9 @@ export const fromSettlementSchema = z.object({
 
 export const paymentCreateSchema = z.object({
   invoiceId: uuidSchema,
-  amount: moneySchema,
+  amount: positiveMoneySchema,
   method: paymentMethodSchema.default("CASH"),
-  paidAt: z.iso.datetime().optional(),
+  paidAt: z.iso.datetime(),
   idempotencyKey: z.string().trim().min(8).max(120).optional(),
   notes: z.string().trim().max(1000).nullable().optional(),
 });
@@ -77,4 +74,6 @@ export const dashboardSummaryQuerySchema = z
 export const monthlyReportQuerySchema = z.object({
   billingYear: z.coerce.number().int().min(2000).max(2100),
   billingMonth: z.coerce.number().int().min(1).max(12),
+  roomId: uuidSchema.optional(),
+  limit: z.coerce.number().int().min(1).max(200).default(100),
 });

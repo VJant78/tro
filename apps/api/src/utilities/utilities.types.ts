@@ -161,6 +161,10 @@ export interface UtilitiesRepository {
     readingKind: UtilityReadingKind;
     excludeId?: string;
   }): Promise<UtilityReadingRecord | null>;
+  findLatestFinalizedReading(input: {
+    roomId: string;
+    beforeOrOn: string;
+  }): Promise<UtilityReadingRecord | null>;
   listSettlements(input: {
     billingYear?: number;
     billingMonth?: number;
@@ -168,14 +172,17 @@ export interface UtilitiesRepository {
     roomId?: string;
   }): Promise<SettlementRecord[]>;
   findSettlementById(id: string): Promise<SettlementRecord | null>;
-  createSettlement(input: SettlementSaveInput): Promise<SettlementRecord>;
+  createSettlement(
+    input: SettlementSaveInput,
+    actorUserId?: string,
+  ): Promise<SettlementRecord>;
   findFinalizedSettlement(input: {
     tenancyId: string;
     periodStart: string;
     periodEnd: string;
   }): Promise<SettlementRecord | null>;
   accountBalance(input: {
-    tenantId: string;
+    tenancyId: string;
     effectiveOn?: string;
   }): Promise<string>;
 }

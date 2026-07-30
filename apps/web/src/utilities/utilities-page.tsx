@@ -1,14 +1,25 @@
 import { FormEvent, useEffect, useMemo, useState } from "react";
 import { Button, StatusBadge } from "@repo/ui";
-import { ApiError, apiFetch } from "../api";
+import { ApiError, apiFetch, messageFor } from "../api";
+import { Modal } from "../components/modal";
+import {
+  formatDate,
+  formatMoney,
+  localDateString,
+  makeIdempotencyKey,
+} from "../format";
+import type { ReceiptHistoryResponse, ReceiptSummary } from "../receipts/types";
 import type { Room, RoomListResponse } from "../rooms/types";
 import type {
   SettlementPreview,
   SettlementType,
   UtilityReading,
+  FinalizeSettlementResponse,
+  OperationRecoveryResponse,
+  RecoverableOperationStatus,
 } from "./types";
 
-const todayDate = new Date().toISOString().slice(0, 10);
+const todayDate = localDateString();
 
 const emptyForm = {
   roomId: "",
@@ -18,20 +29,52 @@ const emptyForm = {
   electricityCurrent: "0",
   waterPrevious: "0",
   waterCurrent: "0",
-  prepaidAmount: "0",
   notes: "",
 };
 
+type RecoveryAction = "resume" | "cancel";
+
+interface RecoveryRequest {
+  operationId: string;
+  status: RecoverableOperationStatus;
+}
+
+interface RecoveryAttempt {
+  operationId: string;
+  action: RecoveryAction;
+  idempotencyKey: string;
+  reason?: string;
+}
+
 export function UtilitiesPage() {
+  const [recoveryRequest, setRecoveryRequest] =
+    useState<RecoveryRequest | null>(recoveryRequestFromLocation);
+  const [recoveryAttempt, setRecoveryAttempt] =
+    useState<RecoveryAttempt | null>(null);
+  const [recoveryError, setRecoveryError] = useState<string | null>(null);
+  const [isRecovering, setIsRecovering] = useState(false);
+  const [isCancelModalOpen, setIsCancelModalOpen] = useState(false);
+  const [cancelReason, setCancelReason] = useState("");
+  const [cancelReasonError, setCancelReasonError] = useState<string | null>(
+    null,
+  );
   const [rooms, setRooms] = useState<Room[]>([]);
   const [form, setForm] = useState(emptyForm);
   const [readings, setReadings] = useState<UtilityReading[]>([]);
   const [preview, setPreview] = useState<SettlementPreview | null>(null);
   const [settlements, setSettlements] = useState<SettlementPreview[]>([]);
   const [error, setError] = useState<string | null>(null);
+  const [success, setSuccess] = useState<string | null>(null);
   const [fieldErrors, setFieldErrors] = useState<Record<string, string>>({});
   const [isLoading, setIsLoading] = useState(true);
   const [isSaving, setIsSaving] = useState(false);
+  const [idempotencyKey, setIdempotencyKey] = useState(makeIdempotencyKey);
+  const [receiptSummary, setReceiptSummary] = useState<ReceiptSummary | null>(
+    null,
+  );
+  const [receiptSummaryError, setReceiptSummaryError] = useState<string | null>(
+    null,
+  );
 
   const activeRooms = useMemo(
     () => rooms.filter((room) => room.currentOccupancy),
@@ -90,10 +133,16 @@ export function UtilitiesPage() {
       ]);
       setRooms(roomResponse.data);
       setSettlements(settlementResponse);
+      const requestedRoomId = new URLSearchParams(window.location.search).get(
+        "roomId",
+      );
       setForm((current) => ({
         ...current,
         roomId:
-          current.roomId ||
+          (requestedRoomId &&
+          roomResponse.data.some((room) => room.id === requestedRoomId)
+            ? requestedRoomId
+            : current.roomId) ||
           roomResponse.data.find((room) => room.currentOccupancy)?.id ||
           "",
       }));
@@ -137,6 +186,40 @@ export function UtilitiesPage() {
   }, [form.roomId]);
 
   useEffect(() => {
+    if (!occupancy) {
+      setReceiptSummary(null);
+      setReceiptSummaryError(null);
+      return;
+    }
+    let isActive = true;
+    setReceiptSummary(null);
+    setReceiptSummaryError(null);
+    apiFetch<ReceiptHistoryResponse>(
+      `/tenancies/${occupancy.tenancyId}/receipts?limit=1`,
+    )
+      .then((response) => {
+        if (!isActive) return;
+        const latestBalance = response.data[0]?.creditBalanceAfter ?? "0";
+        setReceiptSummary(
+          response.summary ?? {
+            creditBalance: latestBalance,
+            receiptCount: response.data.length,
+          },
+        );
+      })
+      .catch((loadError) => {
+        if (!isActive) return;
+        setReceiptSummary(null);
+        setReceiptSummaryError(
+          messageFor(loadError, "Không tải được số dư đã thu."),
+        );
+      });
+    return () => {
+      isActive = false;
+    };
+  }, [occupancy?.tenancyId]);
+
+  useEffect(() => {
     if (!period) return;
     const previousReading = readings
       .filter((reading) => reading.billingPeriodEnd < period.start)
@@ -165,6 +248,7 @@ export function UtilitiesPage() {
     if (!occupancy || !period) return;
     setIsSaving(true);
     setError(null);
+    setSuccess(null);
     setFieldErrors({});
     setPreview(null);
 
@@ -177,6 +261,7 @@ export function UtilitiesPage() {
         },
       );
       setPreview(settlementPreview);
+      setIdempotencyKey(makeIdempotencyKey());
     } catch (saveError) {
       collectFieldErrors(saveError, setFieldErrors);
       setError(messageFor(saveError));
@@ -189,12 +274,29 @@ export function UtilitiesPage() {
     if (!preview || !period) return;
     setIsSaving(true);
     setError(null);
+    setSuccess(null);
     try {
-      await apiFetch<SettlementPreview>("/settlements", {
-        method: "POST",
-        body: JSON.stringify(settlementPayload(preview.tenancyId, period)),
-      });
+      const response = await apiFetch<FinalizeSettlementResponse>(
+        "/settlements/finalize-and-invoice",
+        {
+          method: "POST",
+          body: JSON.stringify({
+            ...settlementPayload(preview.tenancyId, period),
+            idempotencyKey,
+          }),
+        },
+      );
+      if (response.operation.status === "INVOICE_PENDING") {
+        setError(
+          "Kỳ đã chốt nhưng hóa đơn chưa được tạo. Bấm thử lại để hoàn tất hóa đơn.",
+        );
+        return;
+      }
+      setSuccess(
+        `Đã chốt phòng ${selectedRoom?.code ?? "đã chọn"} và tạo hóa đơn ${response.invoice?.invoiceNumber ?? "thành công"}.`,
+      );
       setPreview(null);
+      setIdempotencyKey(makeIdempotencyKey());
       await load();
     } catch (saveError) {
       collectFieldErrors(saveError, setFieldErrors);
@@ -202,6 +304,82 @@ export function UtilitiesPage() {
     } finally {
       setIsSaving(false);
     }
+  }
+
+  function attemptFor(action: RecoveryAction, reason?: string) {
+    if (
+      recoveryRequest &&
+      recoveryAttempt?.operationId === recoveryRequest.operationId &&
+      recoveryAttempt.action === action &&
+      recoveryAttempt.reason === reason
+    ) {
+      return recoveryAttempt;
+    }
+
+    const attempt = {
+      operationId: recoveryRequest?.operationId ?? "",
+      action,
+      idempotencyKey: makeIdempotencyKey(),
+      reason,
+    } satisfies RecoveryAttempt;
+    setRecoveryAttempt(attempt);
+    return attempt;
+  }
+
+  async function recoverOperation(action: RecoveryAction, reason?: string) {
+    if (!recoveryRequest) return;
+    const attempt = attemptFor(action, reason);
+    setIsRecovering(true);
+    setRecoveryError(null);
+    setSuccess(null);
+
+    try {
+      const response = await apiFetch<OperationRecoveryResponse>(
+        `/tenancy-operations/${recoveryRequest.operationId}/${action}`,
+        {
+          method: "POST",
+          headers: { "Idempotency-Key": attempt.idempotencyKey },
+          body: JSON.stringify({
+            idempotencyKey: attempt.idempotencyKey,
+            ...(action === "cancel" ? { reason } : {}),
+          }),
+        },
+      );
+      const status = response.operation?.status ?? response.status;
+      if (status !== "COMPLETED" && status !== "CANCELLED") {
+        setRecoveryError(
+          "Thao tác chưa hoàn tất. Vui lòng kiểm tra lại rồi thử lần nữa.",
+        );
+        return;
+      }
+
+      clearRecoveryQuery();
+      setRecoveryRequest(null);
+      setRecoveryAttempt(null);
+      setIsCancelModalOpen(false);
+      setCancelReason("");
+      setSuccess(
+        status === "CANCELLED"
+          ? "Đã hủy thao tác và giải phóng trạng thái đang chờ."
+          : "Đã hoàn tất thao tác và cập nhật dữ liệu liên quan.",
+      );
+      await load();
+    } catch (recoveryFailure) {
+      setRecoveryError(messageFor(recoveryFailure));
+    } finally {
+      setIsRecovering(false);
+    }
+  }
+
+  function submitCancellation(event: FormEvent<HTMLFormElement>) {
+    event.preventDefault();
+    const reason = cancelReason.trim();
+    if (reason.length < 3) {
+      setCancelReasonError("Nhập lý do ít nhất 3 ký tự.");
+      return;
+    }
+    setCancelReasonError(null);
+    void recoverOperation("cancel", reason);
   }
 
   function settlementPayload(tenancyId: string, targetPeriod: BillingPeriod) {
@@ -220,24 +398,80 @@ export function UtilitiesPage() {
             waterPrevious: form.waterPrevious,
             waterCurrent: form.waterCurrent,
           },
-      prepaidAmount: form.prepaidAmount || "0",
+      prepaidAmount: "0",
       notes: form.notes || null,
     };
   }
 
   return (
     <div className="utilities-layout">
-      <section className="rooms-list" aria-labelledby="utilities-title">
+      <section className="rooms-list" aria-label="Các kỳ tiền đã chốt">
         <div className="section-heading">
           <div>
-            <h1 id="utilities-title">Dien nuoc</h1>
-            <p>{activeRooms.length} phong dang co nguoi o</p>
+            <h1 id="utilities-title">Chốt tiền</h1>
+            <p>{activeRooms.length} phòng đang có người ở</p>
           </div>
         </div>
 
+        {recoveryRequest ? (
+          <div className="notice warning" role="alert">
+            <span>
+              <strong>
+                {recoveryRequest.status === "INVOICE_PENDING"
+                  ? "Hóa đơn chưa được tạo"
+                  : "Thao tác cần được kiểm tra"}
+              </strong>
+              <br />
+              {recoveryRequest.status === "INVOICE_PENDING"
+                ? "Kỳ tiền đã chốt. Hãy thử hoàn tất để tạo hóa đơn còn thiếu."
+                : "Dữ liệu đang ở trạng thái chờ xử lý. Bạn có thể thử hoàn tất hoặc hủy thao tác."}
+            </span>
+            <div className="role-actions">
+              <Button
+                disabled={isRecovering}
+                onClick={() => void recoverOperation("resume")}
+                type="button"
+              >
+                {isRecovering ? "Đang xử lý" : "Thử hoàn tất"}
+              </Button>
+              {recoveryRequest.status === "ACTION_REQUIRED" ? (
+                <Button
+                  disabled={isRecovering}
+                  onClick={() => {
+                    setRecoveryError(null);
+                    setCancelReasonError(null);
+                    setIsCancelModalOpen(true);
+                  }}
+                  type="button"
+                  variant="danger"
+                >
+                  Hủy thao tác
+                </Button>
+              ) : null}
+            </div>
+          </div>
+        ) : null}
+        {recoveryError ? (
+          <div className="notice error" role="alert">
+            {recoveryError}
+          </div>
+        ) : null}
+
         {error ? (
           <div className="notice error" role="alert">
-            {error}
+            <span>{error}</span>
+            <Button
+              type="button"
+              variant="secondary"
+              onClick={() => void load()}
+            >
+              Thử lại
+            </Button>
+          </div>
+        ) : null}
+        {success ? (
+          <div className="notice success" aria-live="polite">
+            {success}
           </div>
         ) : null}
 
@@ -248,33 +482,43 @@ export function UtilitiesPage() {
           </div>
         ) : settlements.length === 0 ? (
           <div className="empty-state">
-            <strong>Chua co ky chot</strong>
+            <strong>Chưa có kỳ đã chốt</strong>
           </div>
         ) : (
           <div className="room-list-stack">
             {settlements.map((item) => (
-              <article
+              <button
                 className="settlement-row"
                 key={item.id ?? `${item.tenancyId}-${item.periodEnd}`}
+                onClick={() => {
+                  setForm((current) => ({
+                    ...current,
+                    roomId: item.roomId,
+                    settlementType: item.settlementType,
+                    periodEnd:
+                      item.settlementType === "MOVE_OUT" ? item.periodEnd : "",
+                  }));
+                  setPreview(null);
+                }}
+                type="button"
               >
                 <span>
-                  <strong>Phong {roomCodeFor(item.roomId, rooms)}</strong>
+                  <strong>Phòng {roomCodeFor(item.roomId, rooms)}</strong>
                   <small>
-                    Dai dien:{" "}
-                    {item.representativeTenantName ?? "Nguoi dai dien"}
+                    Đại diện: {item.representativeTenantName ?? "Chưa xác định"}
                   </small>
                   <small>
                     {formatDate(item.periodStart)} -{" "}
                     {formatDate(item.periodEnd)}
                   </small>
-                  <small>Con thu: {formatMoney(item.outstandingAmount)}</small>
+                  <small>Còn thu: {formatMoney(item.outstandingAmount)}</small>
                 </span>
                 <StatusBadge tone="success">
                   {item.settlementType === "MOVE_OUT"
-                    ? "Tra phong"
-                    : "Cuoi thang"}
+                    ? "Trả phòng"
+                    : "Cuối tháng"}
                 </StatusBadge>
-              </article>
+              </button>
             ))}
           </div>
         )}
@@ -283,11 +527,11 @@ export function UtilitiesPage() {
       <section className="room-detail" aria-labelledby="settlement-title">
         <div className="section-heading">
           <div>
-            <h2 id="settlement-title">Chot tien</h2>
+            <h2 id="settlement-title">Chốt tiền</h2>
             <p>
               {occupancy
-                ? `Dai dien: ${occupancy.representativeName}`
-                : "Chon phong dang thue"}
+                ? `Đại diện: ${occupancy.representativeName}`
+                : "Chọn phòng đang thuê"}
             </p>
           </div>
         </div>
@@ -295,7 +539,7 @@ export function UtilitiesPage() {
         <form className="room-form" onSubmit={(event) => void submit(event)}>
           <div className="form-grid">
             <label className="field">
-              Phong
+              Phòng
               <select
                 onChange={(event) =>
                   setForm({
@@ -309,17 +553,17 @@ export function UtilitiesPage() {
                 }
                 value={form.roomId}
               >
-                <option value="">Chon phong</option>
+                <option value="">Chọn phòng</option>
                 {activeRooms.map((room) => (
                   <option key={room.id} value={room.id}>
-                    {room.code} - {room.currentOccupancy?.representativeName}
+                    {room.name}
                   </option>
                 ))}
               </select>
               <FieldError message={fieldErrors.roomId} />
             </label>
             <label className="field">
-              Kieu chot
+              Kiểu chốt
               <select
                 onChange={(event) =>
                   setForm({
@@ -330,12 +574,12 @@ export function UtilitiesPage() {
                 }
                 value={form.settlementType}
               >
-                <option value="MONTHLY">Cuoi thang</option>
-                <option value="MOVE_OUT">Tra phong giua thang</option>
+                <option value="MONTHLY">Cuối tháng</option>
+                <option value="MOVE_OUT">Trả phòng giữa tháng</option>
               </select>
             </label>
             <label className="field">
-              Ky chot
+              Kỳ chốt
               <input
                 readOnly
                 value={
@@ -346,7 +590,7 @@ export function UtilitiesPage() {
               />
             </label>
             <label className="field">
-              Ngay tra phong
+              Ngày trả phòng
               <input
                 disabled={form.settlementType === "MONTHLY"}
                 min={period?.start}
@@ -359,24 +603,14 @@ export function UtilitiesPage() {
                 }
               />
             </label>
-            <label className="field field-wide">
-              Da tra truoc
-              <input
-                inputMode="numeric"
-                onChange={(event) =>
-                  setForm({ ...form, prepaidAmount: event.target.value })
-                }
-                value={form.prepaidAmount}
-              />
-            </label>
           </div>
           <div className="meter-grid">
             <label className="field">
-              Dien cu
+              Điện cũ (kWh)
               <input readOnly value={form.electricityPrevious} />
             </label>
             <label className="field">
-              Dien moi
+              Điện mới (kWh)
               <input
                 inputMode="decimal"
                 onChange={(event) =>
@@ -389,11 +623,11 @@ export function UtilitiesPage() {
               />
             </label>
             <label className="field">
-              Nuoc cu
+              Nước cũ (m³)
               <input readOnly value={form.waterPrevious} />
             </label>
             <label className="field">
-              Nuoc moi
+              Nước mới (m³)
               <input
                 inputMode="decimal"
                 onChange={(event) =>
@@ -406,17 +640,49 @@ export function UtilitiesPage() {
               />
             </label>
           </div>
+          <div className="credit-balance-panel" aria-label="Số dư đã thu">
+            <span>
+              <small>Đã thu trước</small>
+              <strong>
+                {receiptSummary
+                  ? formatMoney(receiptSummary.creditBalance)
+                  : receiptSummaryError
+                    ? "Không khả dụng"
+                    : "Đang tải..."}
+              </strong>
+              <small>
+                {receiptSummary ? `${receiptSummary.receiptCount} lần thu` : ""}
+              </small>
+            </span>
+            {selectedRoom?.currentOccupancy ? (
+              <a
+                className="text-link"
+                href={`/rooms?roomId=${encodeURIComponent(
+                  selectedRoom.id,
+                )}&receipts=history`}
+              >
+                Xem lịch sử thu
+              </a>
+            ) : null}
+          </div>
+          {receiptSummaryError ? (
+            <small className="field-error" role="alert">
+              {receiptSummaryError}
+            </small>
+          ) : null}
           {selectedPeriodSettlement ? (
             <div className="notice warning">
-              <strong>Ky nay da chot</strong>
+              <strong>Kỳ này đã chốt</strong>
             </div>
           ) : selectedPeriodReading ? (
             <div className="notice warning">
-              <strong>Ky nay da co chi so, se dung lai de chot tien</strong>
+              <strong>
+                Kỳ này đã có chỉ số, hệ thống sẽ dùng lại để chốt tiền
+              </strong>
             </div>
           ) : null}
           <label className="field">
-            Ghi chu
+            Ghi chú
             <textarea
               onChange={(event) =>
                 setForm({ ...form, notes: event.target.value })
@@ -431,44 +697,47 @@ export function UtilitiesPage() {
                 isSaving || !occupancy || Boolean(selectedPeriodSettlement)
               }
             >
-              {isSaving ? "Dang tinh" : "Tinh tam"}
+              {isSaving ? "Đang tính" : "Xem tạm tính"}
             </Button>
           </div>
         </form>
 
         {preview ? (
-          <section className="settlement-preview" aria-label="Bang tinh tam">
+          <section className="settlement-preview" aria-label="Bảng tính tạm">
+            <h3>
+              Tạm tính kỳ {preview.billingMonth}/{preview.billingYear}
+            </h3>
             <div className="settlement-grid">
               <Fact
-                label="So ngay o"
+                label="Số ngày ở"
                 value={`${preview.occupiedDays}/${preview.daysInMonth}`}
               />
               <Fact
-                label="Tien phong"
+                label={`Tiền phòng tháng ${preview.billingMonth}/${preview.billingYear}`}
                 value={formatMoney(preview.proratedRentAmount)}
               />
               <Fact
-                label="Tien dien"
+                label="Tiền điện"
                 value={formatMoney(preview.electricityAmount)}
               />
               <Fact
-                label="Tien nuoc"
+                label="Tiền nước"
                 value={formatMoney(preview.waterAmount)}
               />
               <Fact
-                label="Da tru tong tien"
+                label="Đã thu trước"
                 value={formatMoney(preview.prepaidAppliedAmount)}
               />
               <Fact
-                label="Du chuyen ky sau"
+                label="Dư chuyển kỳ sau"
                 value={formatMoney(preview.carryForwardAmount)}
               />
               <Fact
-                label="Tong ky nay"
+                label="Tổng trước khấu trừ"
                 value={formatMoney(preview.totalAmount)}
               />
               <Fact
-                label="Con thu"
+                label="Còn phải thu"
                 value={formatMoney(preview.outstandingAmount)}
               />
             </div>
@@ -476,14 +745,68 @@ export function UtilitiesPage() {
               <Button
                 type="button"
                 disabled={isSaving}
-                onClick={() => void finalizeSettlement()}
+                onClick={() => {
+                  const confirmed = window.confirm(
+                    `Chốt phòng ${selectedRoom?.code ?? "đã chọn"} kỳ ${formatDate(period?.start)} - ${formatDate(period?.end)} và tạo hóa đơn ${formatMoney(preview.outstandingAmount)}?`,
+                  );
+                  if (confirmed) void finalizeSettlement();
+                }}
               >
-                Chot tien
+                {isSaving ? "Đang chốt" : "Chốt và tạo hóa đơn"}
               </Button>
             </div>
           </section>
         ) : null}
       </section>
+
+      {isCancelModalOpen && recoveryRequest ? (
+        <Modal
+          onClose={() => {
+            if (!isRecovering) setIsCancelModalOpen(false);
+          }}
+          title="Hủy thao tác đang chờ"
+        >
+          <form className="room-form" onSubmit={submitCancellation}>
+            <p className="modal-context">
+              Chỉ hủy khi đã kiểm tra và không thể tiếp tục thao tác này. Dữ
+              liệu đã chốt trước đó không bị tự động xóa.
+            </p>
+            <label className="field">
+              Lý do hủy
+              <textarea
+                autoFocus
+                disabled={isRecovering}
+                maxLength={500}
+                onChange={(event) => {
+                  setCancelReason(event.target.value);
+                  setCancelReasonError(null);
+                }}
+                placeholder="Ví dụ: Chọn nhầm phòng đích"
+                value={cancelReason}
+              />
+              <FieldError message={cancelReasonError ?? undefined} />
+            </label>
+            {recoveryError ? (
+              <div className="notice error" role="alert">
+                {recoveryError}
+              </div>
+            ) : null}
+            <div className="form-actions modal-actions">
+              <Button
+                disabled={isRecovering}
+                onClick={() => setIsCancelModalOpen(false)}
+                type="button"
+                variant="secondary"
+              >
+                Quay lại
+              </Button>
+              <Button disabled={isRecovering} type="submit" variant="danger">
+                {isRecovering ? "Đang hủy" : "Xác nhận hủy"}
+              </Button>
+            </div>
+          </form>
+        </Modal>
+      ) : null}
     </div>
   );
 }
@@ -565,7 +888,31 @@ function maxDateString(left: string, right: string) {
 }
 
 function roomCodeFor(roomId: string, rooms: Room[]) {
-  return rooms.find((room) => room.id === roomId)?.code ?? roomId.slice(0, 8);
+  return rooms.find((room) => room.id === roomId)?.code ?? "-";
+}
+
+function recoveryRequestFromLocation(): RecoveryRequest | null {
+  const params = new URLSearchParams(window.location.search);
+  const operationId = params.get("operationId")?.trim();
+  const status = params.get("operationStatus");
+  if (
+    !operationId ||
+    (status !== "INVOICE_PENDING" && status !== "ACTION_REQUIRED")
+  ) {
+    return null;
+  }
+  return { operationId, status };
+}
+
+function clearRecoveryQuery() {
+  const url = new URL(window.location.href);
+  url.searchParams.delete("operationId");
+  url.searchParams.delete("operationStatus");
+  window.history.replaceState(
+    {},
+    "",
+    `${url.pathname}${url.search}${url.hash}`,
+  );
 }
 
 function collectFieldErrors(
@@ -579,18 +926,4 @@ function collectFieldErrors(
       ),
     );
   }
-}
-
-function formatMoney(value: string | number) {
-  return new Intl.NumberFormat("vi-VN").format(Number(value)) + " VND";
-}
-
-function formatDate(value: string) {
-  if (!value) return "-";
-  return new Intl.DateTimeFormat("vi-VN").format(new Date(`${value}T00:00:00`));
-}
-
-function messageFor(error: unknown) {
-  if (error instanceof Error) return error.message;
-  return "Co loi xay ra";
 }

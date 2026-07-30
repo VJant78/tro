@@ -126,7 +126,15 @@ export class InMemoryRoomRepository implements RoomRepository {
 
 function stripDeletedAt(room: RoomRecord & { deletedAt: string | null }) {
   const { deletedAt: _deletedAt, ...record } = room;
-  return record;
+  return {
+    ...record,
+    status:
+      record.status === "INACTIVE" || record.status === "MAINTENANCE"
+        ? record.status
+        : record.currentOccupancy
+          ? ("OCCUPIED" as const)
+          : ("VACANT" as const),
+  };
 }
 
 function compareRooms(

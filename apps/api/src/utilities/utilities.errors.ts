@@ -3,6 +3,7 @@ import {
   NotFoundException,
   UnprocessableEntityException,
 } from "@nestjs/common";
+import { DomainException } from "../platform/domain.exception.js";
 
 export class UtilityReadingNotFoundException extends NotFoundException {
   constructor() {
@@ -30,14 +31,36 @@ export class FinalizedReadingConflictException extends ConflictException {
   }
 }
 
-export class FinalizedSettlementConflictException extends ConflictException {
+export class FinalizedSettlementConflictException extends DomainException {
   constructor() {
-    super("A finalized settlement already exists for this tenancy and period");
+    super(
+      "SETTLEMENT_ALREADY_FINALIZED",
+      "A finalized settlement already exists for this tenancy and period",
+    );
   }
 }
 
 export class SettlementValidationException extends UnprocessableEntityException {
   constructor(message: string) {
     super({ message, details: [] });
+  }
+}
+
+export class ReadingBaselineChangedException extends DomainException {
+  constructor() {
+    super(
+      "READING_BASELINE_CHANGED",
+      "Previous utility readings no longer match the latest finalized reading",
+    );
+  }
+}
+
+export class PrepaidInputDeprecatedException extends DomainException {
+  constructor() {
+    super(
+      "PREPAID_INPUT_DEPRECATED",
+      "Manual prepaid input is no longer supported; record a receipt instead",
+      422,
+    );
   }
 }

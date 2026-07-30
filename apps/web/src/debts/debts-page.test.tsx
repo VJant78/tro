@@ -8,6 +8,7 @@ const payerTenantId = "00000000-0000-4000-8000-000000000301";
 
 describe("DebtsPage", () => {
   beforeEach(() => {
+    vi.spyOn(window, "confirm").mockReturnValue(true);
     vi.spyOn(globalThis, "fetch").mockImplementation(async (input, init) => {
       const url = String(input);
       const method = init?.method ?? "GET";
@@ -121,18 +122,18 @@ describe("DebtsPage", () => {
     const user = userEvent.setup();
     render(<DebtsPage />);
 
-    expect(await screen.findAllByText("Phong A-101")).toHaveLength(2);
-    expect(screen.getAllByText("Qua han 25 ngay")).toHaveLength(2);
+    expect(await screen.findAllByText("Phòng A-101")).toHaveLength(2);
+    expect(screen.getAllByText("Quá hạn 25 ngày")).toHaveLength(2);
     expect(screen.getByText("PAY-20260720-ABC")).toBeInTheDocument();
     expect(screen.getAllByText("2.065.000 VND").length).toBeGreaterThanOrEqual(
       3,
     );
 
     await user.selectOptions(
-      screen.getByLabelText("Loc trang thai"),
+      screen.getByLabelText("Lọc trạng thái"),
       "OVERDUE",
     );
-    await user.click(screen.getByRole("button", { name: "Loc" }));
+    await user.click(screen.getByRole("button", { name: "Lọc" }));
     await waitFor(() => {
       expect(globalThis.fetch).toHaveBeenCalledWith(
         expect.stringContaining("/debts?status=OVERDUE"),
@@ -140,9 +141,9 @@ describe("DebtsPage", () => {
       );
     });
 
-    await user.clear(screen.getByLabelText("So tien thu"));
-    await user.type(screen.getByLabelText("So tien thu"), "500000");
-    await user.click(screen.getByRole("button", { name: "Thu nhanh" }));
+    await user.clear(screen.getByLabelText(/Số tiền thu/));
+    await user.type(screen.getByLabelText(/Số tiền thu/), "500000");
+    await user.click(screen.getByRole("button", { name: "Thu tiền" }));
     await waitFor(() => {
       expect(globalThis.fetch).toHaveBeenCalledWith(
         expect.stringContaining("/payments"),

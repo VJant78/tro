@@ -1,12 +1,9 @@
 import { z } from "zod";
+import { boundedMoneySchema } from "../platform/numeric.js";
 
 const uuidSchema = z.uuid();
 const dateSchema = z.iso.date();
-const moneySchema = z
-  .union([z.string(), z.number()])
-  .transform((value) => String(value).trim())
-  .refine((value) => /^\d+$/.test(value), "Must be a non-negative integer");
-const nullableMoneySchema = moneySchema.nullable().optional();
+const nullableMoneySchema = boundedMoneySchema.nullable().optional();
 
 export const pricingScopeSchema = z.enum([
   "SYSTEM",

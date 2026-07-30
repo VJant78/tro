@@ -7,5 +7,7 @@ coverage/
 .env.*
 !.env.example
 *.log
+reports/*
+!reports/.gitkeep
 .DS_Store
 .vscode/*.local.json

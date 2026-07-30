@@ -4,9 +4,17 @@ export type PaymentMethod = "CASH" | "BANK_TRANSFER" | "OTHER";
 export type DebtStatus =
   "OUTSTANDING" | "PARTIALLY_PAID" | "DUE_TODAY" | "OVERDUE";
 
+export interface UtilityUsage {
+  previous: string;
+  current: string;
+  usage: string;
+  unit: "kWh" | "m3";
+  unitPrice: string;
+  amount: string;
+}
+
 export interface InvoiceItem {
   id: string;
-  invoiceId: string;
   itemType: string;
   description: string;
   quantity: string;
@@ -14,12 +22,11 @@ export interface InvoiceItem {
   unitPrice: string;
   amount: string;
   sortOrder: number;
+  utilityUsage: UtilityUsage | null;
+  utilityUsageSource: "INVOICE_SNAPSHOT" | "LEGACY_FINALIZED_READING" | null;
 }
 
 export interface PaymentAllocation {
-  id: string;
-  paymentId: string;
-  invoiceId: string;
   amount: string;
   allocatedAt: string;
   paymentNumber: string | null;
@@ -33,8 +40,6 @@ export interface Invoice {
   invoiceNumber: string;
   roomId: string;
   roomCode: string | null;
-  tenancyId: string | null;
-  payerTenantId: string | null;
   payerTenantName: string | null;
   status: InvoiceStatus;
   billingPeriodStart: string;
@@ -44,8 +49,6 @@ export interface Invoice {
   totalAmount: string;
   paidAmount: string;
   outstandingAmount: string;
-  sourceKey: string | null;
-  notes: string | null;
   items: InvoiceItem[];
   paymentAllocations: PaymentAllocation[];
 }
@@ -102,12 +105,41 @@ export interface DashboardSummary {
   }>;
 }
 
+export type DashboardActionKind =
+  | "UNSETTLED_PERIOD"
+  | "INVOICE_PENDING"
+  | "ACTION_REQUIRED"
+  | "DUE_SOON"
+  | "DUE_TODAY"
+  | "OVERDUE";
+
+export interface DashboardAction {
+  id: string;
+  kind: DashboardActionKind;
+  roomId: string;
+  roomCode: string | null;
+  periodStart?: string | null;
+  periodEnd?: string | null;
+  dueOn?: string | null;
+  amount?: string | null;
+  reason?: string | null;
+  target: {
+    route: string;
+    params?: Record<string, string>;
+  };
+}
+
 export interface MonthlyReport {
   billingYear: number;
   billingMonth: number;
   periodStart: string;
   periodEnd: string;
   totals: {
+    grossBilled: string;
+    cashReceived: string;
+    cashReversed: string;
+    creditApplied: string;
+    netOutstanding: string;
     invoiceTotal: string;
     collected: string;
     outstanding: string;

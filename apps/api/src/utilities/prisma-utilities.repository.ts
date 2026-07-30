@@ -6,6 +6,10 @@ import {
   type UtilityReading,
 } from "@prisma/client";
 import { PrismaService } from "../database/prisma.service.js";
+import { AuditService } from "../audit/audit.service.js";
+import { moneyString, moneyValue } from "../platform/numeric.js";
+import { authorizedPropertyId } from "../platform/property-scope.js";
+import { DomainException } from "../platform/domain.exception.js";
 import type {
   SettlementRecord,
   SettlementSaveInput,
@@ -89,12 +93,16 @@ function mapSettlement(settlement: SettlementWithTenant): SettlementRecord {
 
 @Injectable()
 export class PrismaUtilitiesRepository implements UtilitiesRepository {
-  constructor(@Inject(PrismaService) private readonly prisma: PrismaService) {}
+  constructor(
+    @Inject(PrismaService) private readonly prisma: PrismaService,
+    @Inject(AuditService) private readonly audit: AuditService,
+  ) {}
 
   async listReadings(query: UtilityReadingListQuery) {
     const readings = await this.prisma.utilityReading.findMany({
       where: {
         deletedAt: null,
+        room: { propertyId: authorizedPropertyId() },
         roomId: query.roomId,
         tenancyId: query.tenancyId,
         billingYear: query.billingYear,
@@ -109,12 +117,17 @@ export class PrismaUtilitiesRepository implements UtilitiesRepository {
 
   async findReadingById(id: string) {
     const reading = await this.prisma.utilityReading.findFirst({
-      where: { id, deletedAt: null },
+      where: {
+        id,
+        deletedAt: null,
+        room: { propertyId: authorizedPropertyId() },
+      },
     });
     return reading ? mapReading(reading) : null;
   }
 
   async createReading(input: UtilityReadingSaveInput) {
+    await this.assertReadingScope(input.roomId, input.tenancyId);
     return mapReading(
       await this.prisma.utilityReading.create({
         data: this.readingDataFor(
@@ -127,6 +140,10 @@ export class PrismaUtilitiesRepository implements UtilitiesRepository {
   async updateReading(id: string, input: Partial<UtilityReadingSaveInput>) {
     const current = await this.findReadingById(id);
     if (!current) return null;
+    await this.assertReadingScope(
+      input.roomId ?? current.roomId,
+      input.tenancyId === undefined ? current.tenancyId : input.tenancyId,
+    );
     return mapReading(
       await this.prisma.utilityReading.update({
         where: { id },
@@ -164,7 +181,25 @@ export class PrismaUtilitiesRepository implements UtilitiesRepository {
         readingKind: input.readingKind,
         status: "FINALIZED",
         deletedAt: null,
+        room: { propertyId: authorizedPropertyId() },
       },
+    });
+    return reading ? mapReading(reading) : null;
+  }
+
+  async findLatestFinalizedReading(input: {
+    roomId: string;
+    beforeOrOn: string;
+  }) {
+    const reading = await this.prisma.utilityReading.findFirst({
+      where: {
+        roomId: input.roomId,
+        billingPeriodEnd: { lte: dateValue(input.beforeOrOn) },
+        status: "FINALIZED",
+        deletedAt: null,
+        room: { propertyId: authorizedPropertyId() },
+      },
+      orderBy: [{ billingPeriodEnd: "desc" }, { finalizedAt: "desc" }],
     });
     return reading ? mapReading(reading) : null;
   }
@@ -178,6 +213,7 @@ export class PrismaUtilitiesRepository implements UtilitiesRepository {
     const settlements = await this.prisma.settlement.findMany({
       where: {
         deletedAt: null,
+        room: { propertyId: authorizedPropertyId() },
         billingYear: input.billingYear,
         billingMonth: input.billingMonth,
         tenancyId: input.tenancyId,
@@ -191,14 +227,19 @@ export class PrismaUtilitiesRepository implements UtilitiesRepository {
 
   async findSettlementById(id: string) {
     const settlement = await this.prisma.settlement.findFirst({
-      where: { id, deletedAt: null },
+      where: {
+        id,
+        deletedAt: null,
+        room: { propertyId: authorizedPropertyId() },
+      },
       include: { representativeTenant: { select: { fullName: true } } },
     });
     return settlement ? mapSettlement(settlement) : null;
   }
 
-  async createSettlement(input: SettlementSaveInput) {
+  async createSettlement(input: SettlementSaveInput, actorUserId?: string) {
     const saved = await this.prisma.$transaction(async (tx) => {
+      await this.assertSettlementScope(input, tx);
       const settlement = await tx.settlement.create({
         data: {
           settlementType: input.settlement.settlementType,
@@ -228,40 +269,22 @@ export class PrismaUtilitiesRepository implements UtilitiesRepository {
         },
       });
 
-      if (Number(input.prepaidAmount) > 0) {
-        await tx.tenantAccountEntry.create({
-          data: {
-            tenantId: input.settlement.representativeTenantId,
-            tenancyId: input.settlement.tenancyId,
-            roomId: input.settlement.roomId,
-            settlementId: settlement.id,
-            entryType: "PREPAYMENT",
-            amount: input.prepaidAmount,
-            effectiveOn: dateValue(input.settlement.periodEnd),
-            notes: "Tien tra truoc nhap khi chot",
-          },
-        });
-      }
-
-      if (Number(input.creditAppliedAmount) > 0) {
-        await tx.tenantAccountEntry.create({
-          data: {
-            tenantId: input.settlement.representativeTenantId,
-            tenancyId: input.settlement.tenancyId,
-            roomId: input.settlement.roomId,
-            settlementId: settlement.id,
-            entryType: "CREDIT_APPLIED",
-            amount: input.creditAppliedAmount,
-            effectiveOn: dateValue(input.settlement.periodEnd),
-            notes: "Tien tra truoc da tru vao tong tien",
-          },
-        });
-      }
-
-      return tx.settlement.findUniqueOrThrow({
+      const savedSettlement = await tx.settlement.findUniqueOrThrow({
         where: { id: settlement.id },
         include: { representativeTenant: { select: { fullName: true } } },
       });
+      await this.audit.record(
+        {
+          action: "ISSUE_INVOICE",
+          entityType: "settlement",
+          entityId: settlement.id,
+          actorUserId,
+          newValues: mapSettlement(savedSettlement),
+          metadata: { mode: "settlement-finalized" },
+        },
+        tx,
+      );
+      return savedSettlement;
     });
 
     return mapSettlement(saved);
@@ -279,16 +302,18 @@ export class PrismaUtilitiesRepository implements UtilitiesRepository {
         periodEnd: dateValue(input.periodEnd),
         status: "FINALIZED",
         deletedAt: null,
+        room: { propertyId: authorizedPropertyId() },
       },
       include: { representativeTenant: { select: { fullName: true } } },
     });
     return settlement ? mapSettlement(settlement) : null;
   }
 
-  async accountBalance(input: { tenantId: string; effectiveOn?: string }) {
+  async accountBalance(input: { tenancyId: string; effectiveOn?: string }) {
     const entries = await this.prisma.tenantAccountEntry.findMany({
       where: {
-        tenantId: input.tenantId,
+        tenancyId: input.tenancyId,
+        propertyId: authorizedPropertyId(),
         deletedAt: null,
         effectiveOn: input.effectiveOn
           ? { lte: dateValue(input.effectiveOn) }
@@ -296,10 +321,10 @@ export class PrismaUtilitiesRepository implements UtilitiesRepository {
       },
     });
     const balance = entries.reduce((total, entry) => {
-      const amount = Number(entry.amount.toString());
-      return entry.entryType === "PREPAYMENT" ? total + amount : total - amount;
-    }, 0);
-    return String(Math.max(0, balance));
+      const amount = moneyValue(entry.amount.toString());
+      return entry.direction === "CREDIT" ? total + amount : total - amount;
+    }, 0n);
+    return moneyString(balance > 0n ? balance : 0n);
   }
 
   private readingDataFor(input: Partial<UtilityReadingSaveInput>) {
@@ -330,5 +355,54 @@ export class PrismaUtilitiesRepository implements UtilitiesRepository {
       finalizedAt: input.finalizedAt ? new Date(input.finalizedAt) : undefined,
       notes: input.notes,
     };
+  }
+
+  private async assertReadingScope(roomId: string, tenancyId?: string | null) {
+    const room = await this.prisma.room.findFirst({
+      where: {
+        id: roomId,
+        propertyId: authorizedPropertyId(),
+        deletedAt: null,
+      },
+      select: { id: true },
+    });
+    if (!room) throw this.scopeException();
+    if (!tenancyId) return;
+
+    const tenancy = await this.prisma.tenancy.findFirst({
+      where: {
+        id: tenancyId,
+        roomId,
+        room: { propertyId: authorizedPropertyId() },
+        deletedAt: null,
+      },
+      select: { id: true },
+    });
+    if (!tenancy) throw this.scopeException();
+  }
+
+  private async assertSettlementScope(
+    input: SettlementSaveInput,
+    tx: Prisma.TransactionClient,
+  ) {
+    const tenancy = await tx.tenancy.findFirst({
+      where: {
+        id: input.settlement.tenancyId,
+        roomId: input.settlement.roomId,
+        representativeTenantId: input.settlement.representativeTenantId,
+        room: { propertyId: authorizedPropertyId() },
+        deletedAt: null,
+      },
+      select: { id: true },
+    });
+    if (!tenancy) throw this.scopeException();
+  }
+
+  private scopeException() {
+    return new DomainException(
+      "PROPERTY_SCOPE_FORBIDDEN",
+      "Resource does not belong to the authorized property",
+      403,
+    );
   }
 }

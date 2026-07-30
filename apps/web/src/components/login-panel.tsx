@@ -1,9 +1,14 @@
 import { FormEvent, useState } from "react";
 import { Button } from "@repo/ui";
-import { apiFetch } from "../api";
+import { apiFetch, messageFor } from "../api";
 
 export function LoginPanel() {
-  const [error, setError] = useState<string | null>(null);
+  const [error, setError] = useState<string | null>(() =>
+    new URLSearchParams(window.location.search).get("reason") ===
+    "session-expired"
+      ? "Phiên đăng nhập đã hết hạn. Vui lòng đăng nhập lại."
+      : null,
+  );
   const [isSubmitting, setIsSubmitting] = useState(false);
 
   async function submit(event: FormEvent<HTMLFormElement>) {
@@ -23,18 +28,16 @@ export function LoginPanel() {
       });
       window.location.assign("/");
     } catch (loginError) {
-      setError(
-        loginError instanceof Error ? loginError.message : "Dang nhap loi",
-      );
+      setError(messageFor(loginError, "Không thể đăng nhập."));
     } finally {
       setIsSubmitting(false);
     }
   }
 
   return (
-    <form className="login-panel" aria-label="Dang nhap" onSubmit={submit}>
-      <h1>Dang nhap</h1>
-      <p>Truy cap bang tai khoan chu tro hoac quan ly.</p>
+    <form className="login-panel" aria-label="Đăng nhập" onSubmit={submit}>
+      <h1>Đăng nhập</h1>
+      <p>Truy cập bằng tài khoản chủ trọ hoặc quản lý.</p>
       {error ? (
         <div className="notice error" role="alert">
           {error}
@@ -42,25 +45,20 @@ export function LoginPanel() {
       ) : null}
       <label className="field">
         Email
-        <input
-          autoComplete="email"
-          defaultValue="owner@example.local"
-          name="email"
-          type="email"
-        />
+        <input autoComplete="email" name="email" required type="email" />
       </label>
       <label className="field">
-        Mat khau
+        Mật khẩu
         <input
           autoComplete="current-password"
-          defaultValue="ChangeMe123!"
           name="password"
+          required
           type="password"
         />
       </label>
       <div style={{ marginTop: 18 }}>
         <Button type="submit" disabled={isSubmitting}>
-          {isSubmitting ? "Dang dang nhap" : "Dang nhap"}
+          {isSubmitting ? "Đang đăng nhập" : "Đăng nhập"}
         </Button>
       </div>
     </form>

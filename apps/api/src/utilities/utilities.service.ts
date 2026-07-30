@@ -1,5 +1,14 @@
 import { Inject, Injectable } from "@nestjs/common";
 import { AuditService } from "../audit/audit.service.js";
+import {
+  meterString,
+  meterValue,
+  minMoney,
+  moneyString,
+  moneyValue,
+  roundedDivide,
+  utilityAmount,
+} from "../platform/numeric.js";
 import { PricingService } from "../pricing/pricing.service.js";
 import { TenantsService } from "../tenants/tenants.service.js";
 import type { TenancyRecord } from "../tenants/tenants.types.js";
@@ -8,6 +17,8 @@ import {
   FinalizedSettlementConflictException,
   SettlementTenancyNotFoundException,
   SettlementValidationException,
+  ReadingBaselineChangedException,
+  PrepaidInputDeprecatedException,
   UtilityReadingNotFoundException,
 } from "./utilities.errors.js";
 import { UTILITIES_REPOSITORY } from "./utilities.tokens.js";
@@ -45,6 +56,14 @@ export class UtilitiesService {
 
   findSettlementById(id: string) {
     return this.utilities.findSettlementById(id);
+  }
+
+  findFinalizedSettlement(input: {
+    tenancyId: string;
+    periodStart: string;
+    periodEnd: string;
+  }) {
+    return this.utilities.findFinalizedSettlement(input);
   }
 
   async createReading(input: UtilityReadingCreateInput, actorUserId?: string) {
@@ -87,10 +106,12 @@ export class UtilitiesService {
   async previewSettlement(
     input: SettlementInput,
   ): Promise<SettlementPreviewRecord> {
+    this.assertNoManualPrepaid(input);
     return this.calculateSettlement(input);
   }
 
   async createSettlement(input: SettlementInput, actorUserId?: string) {
+    this.assertNoManualPrepaid(input);
     let preview = await this.calculateSettlement(input);
     const duplicateSettlement = await this.utilities.findFinalizedSettlement({
       tenancyId: preview.tenancyId,
@@ -140,44 +161,44 @@ export class UtilitiesService {
       });
     }
 
-    const settlement = await this.utilities.createSettlement({
-      settlement: {
-        settlementType: preview.settlementType,
-        status: "FINALIZED",
-        roomId: preview.roomId,
-        tenancyId: preview.tenancyId,
-        representativeTenantId: preview.representativeTenantId,
-        utilityReadingId,
-        periodStart: preview.periodStart,
-        periodEnd: preview.periodEnd,
-        billingYear: preview.billingYear,
-        billingMonth: preview.billingMonth,
-        occupiedDays: preview.occupiedDays,
-        daysInMonth: preview.daysInMonth,
-        rentAmount: preview.rentAmount,
-        proratedRentAmount: preview.proratedRentAmount,
-        electricityAmount: preview.electricityAmount,
-        waterAmount: preview.waterAmount,
-        totalAmount: preview.totalAmount,
-        prepaidAppliedAmount: preview.prepaidAppliedAmount,
-        carryForwardAmount: preview.carryForwardAmount,
-        outstandingAmount: preview.outstandingAmount,
-        finalizedAt: new Date().toISOString(),
-        notes: preview.notes,
+    const settlement = await this.utilities.createSettlement(
+      {
+        settlement: {
+          settlementType: preview.settlementType,
+          status: "FINALIZED",
+          roomId: preview.roomId,
+          tenancyId: preview.tenancyId,
+          representativeTenantId: preview.representativeTenantId,
+          utilityReadingId,
+          periodStart: preview.periodStart,
+          periodEnd: preview.periodEnd,
+          billingYear: preview.billingYear,
+          billingMonth: preview.billingMonth,
+          occupiedDays: preview.occupiedDays,
+          daysInMonth: preview.daysInMonth,
+          rentAmount: preview.rentAmount,
+          proratedRentAmount: preview.proratedRentAmount,
+          electricityAmount: preview.electricityAmount,
+          waterAmount: preview.waterAmount,
+          totalAmount: preview.totalAmount,
+          prepaidAppliedAmount: preview.prepaidAppliedAmount,
+          carryForwardAmount: preview.carryForwardAmount,
+          outstandingAmount: preview.outstandingAmount,
+          finalizedAt: new Date().toISOString(),
+          notes: preview.notes,
+        },
+        prepaidAmount: "0",
+        creditAppliedAmount: "0",
       },
-      prepaidAmount: preview.newPrepaidAmount,
-      creditAppliedAmount: preview.prepaidAppliedAmount,
-    });
-
-    await this.audit.record({
-      action: "ISSUE_INVOICE",
-      entityType: "settlement",
-      entityId: settlement.id,
       actorUserId,
-      newValues: settlement,
-      metadata: { mode: "settlement-foundation" },
-    });
+    );
     return settlement;
+  }
+
+  private assertNoManualPrepaid(input: SettlementInput) {
+    if (moneyValue(input.prepaidAmount ?? "0") > 0n) {
+      throw new PrepaidInputDeprecatedException();
+    }
   }
 
   private async withUtilityAmounts(input: UtilityReadingCreateInput) {
@@ -187,26 +208,26 @@ export class UtilitiesService {
       asOf: input.billingPeriodEnd,
     });
     const electricityUnitPrice = moneyValue(
-      pricing.resolvedConfig.electricityUnitPrice,
+      String(pricing.resolvedConfig.electricityUnitPrice ?? "0"),
     );
-    const waterUnitPrice = moneyValue(pricing.resolvedConfig.waterUnitPrice);
+    const waterUnitPrice = moneyValue(
+      String(pricing.resolvedConfig.waterUnitPrice ?? "0"),
+    );
     const electricityUsage =
-      Number(input.electricityCurrent) - Number(input.electricityPrevious);
-    const waterUsage = Number(input.waterCurrent) - Number(input.waterPrevious);
-    const electricityAmount = Math.round(
-      electricityUsage * electricityUnitPrice,
-    );
-    const waterAmount = Math.round(waterUsage * waterUnitPrice);
+      meterValue(input.electricityCurrent) -
+      meterValue(input.electricityPrevious);
+    const waterUsage =
+      meterValue(input.waterCurrent) - meterValue(input.waterPrevious);
 
     return {
       ...input,
       tenancyId: input.tenancyId ?? null,
-      electricityUsage: decimalString(electricityUsage),
-      electricityUnitPrice: String(electricityUnitPrice),
-      electricityAmount: String(electricityAmount),
-      waterUsage: decimalString(waterUsage),
-      waterUnitPrice: String(waterUnitPrice),
-      waterAmount: String(waterAmount),
+      electricityUsage: meterString(electricityUsage),
+      electricityUnitPrice: moneyString(electricityUnitPrice),
+      electricityAmount: utilityAmount(electricityUsage, electricityUnitPrice),
+      waterUsage: meterString(waterUsage),
+      waterUnitPrice: moneyString(waterUnitPrice),
+      waterAmount: utilityAmount(waterUsage, waterUnitPrice),
       status: "DRAFT" as const,
       finalizedAt: null,
     };
@@ -244,31 +265,28 @@ export class UtilitiesService {
       : await this.previewReadingForSettlement(input, tenancy, period);
 
     const daysInMonth = daysInMonthFor(input.billingYear, input.billingMonth);
-    const rentAmount = Number(tenancy.rentAmount);
-    const proratedRentAmount = Math.round(
-      (rentAmount / daysInMonth) * occupiedDays,
+    const rentAmount = moneyValue(tenancy.rentAmount);
+    const proratedRentAmount = roundedDivide(
+      rentAmount * BigInt(occupiedDays),
+      BigInt(daysInMonth),
     );
-    const electricityAmount = Number(
+    const electricityAmount = moneyValue(
       reading?.electricityAmount ?? previewReading?.electricityAmount ?? "0",
     );
-    const waterAmount = Number(
+    const waterAmount = moneyValue(
       reading?.waterAmount ?? previewReading?.waterAmount ?? "0",
     );
     const totalAmount = proratedRentAmount + electricityAmount + waterAmount;
-    const creditBalanceBefore = Number(
+    const creditBalanceBefore = moneyValue(
       await this.utilities.accountBalance({
-        tenantId: tenancy.representativeTenantId,
+        tenancyId: tenancy.id,
         effectiveOn: period.end,
       }),
     );
-    const newPrepaidAmount = Number(input.prepaidAmount ?? "0");
-    const availableCredit = creditBalanceBefore + newPrepaidAmount;
-    const prepaidAppliedAmount = Math.min(availableCredit, totalAmount);
-    const carryForwardAmount = Math.max(
-      0,
-      availableCredit - prepaidAppliedAmount,
-    );
-    const outstandingAmount = Math.max(0, totalAmount - prepaidAppliedAmount);
+    const newPrepaidAmount = 0n;
+    const prepaidAppliedAmount = 0n;
+    const carryForwardAmount = creditBalanceBefore;
+    const outstandingAmount = totalAmount;
 
     return {
       id: null,
@@ -285,21 +303,21 @@ export class UtilitiesService {
       billingMonth: input.billingMonth,
       occupiedDays,
       daysInMonth,
-      rentAmount: String(rentAmount),
-      proratedRentAmount: String(proratedRentAmount),
-      electricityAmount: String(electricityAmount),
-      waterAmount: String(waterAmount),
-      totalAmount: String(totalAmount),
-      prepaidAppliedAmount: String(prepaidAppliedAmount),
-      carryForwardAmount: String(carryForwardAmount),
-      outstandingAmount: String(outstandingAmount),
+      rentAmount: moneyString(rentAmount),
+      proratedRentAmount: moneyString(proratedRentAmount),
+      electricityAmount: moneyString(electricityAmount),
+      waterAmount: moneyString(waterAmount),
+      totalAmount: moneyString(totalAmount),
+      prepaidAppliedAmount: moneyString(prepaidAppliedAmount),
+      carryForwardAmount: moneyString(carryForwardAmount),
+      outstandingAmount: moneyString(outstandingAmount),
       finalizedAt: null,
       notes: input.notes ?? null,
       createdAt: new Date().toISOString(),
       updatedAt: new Date().toISOString(),
-      creditBalanceBefore: String(creditBalanceBefore),
-      newPrepaidAmount: String(newPrepaidAmount),
-      creditBalanceAfter: String(carryForwardAmount),
+      creditBalanceBefore: moneyString(creditBalanceBefore),
+      newPrepaidAmount: moneyString(newPrepaidAmount),
+      creditBalanceAfter: moneyString(carryForwardAmount),
     };
   }
 
@@ -316,6 +334,19 @@ export class UtilitiesService {
     period: { start: string; end: string },
   ): Promise<UtilityReadingRecord | null> {
     if (!input.utilityReading) return null;
+    const baseline = await this.utilities.findLatestFinalizedReading({
+      roomId: tenancy.roomId,
+      beforeOrOn: period.start,
+    });
+    if (
+      baseline &&
+      (meterValue(input.utilityReading.electricityPrevious) !==
+        meterValue(baseline.electricityCurrent) ||
+        meterValue(input.utilityReading.waterPrevious) !==
+          meterValue(baseline.waterCurrent))
+    ) {
+      throw new ReadingBaselineChangedException();
+    }
     const priced = await this.withUtilityAmounts({
       roomId: tenancy.roomId,
       tenancyId: tenancy.id,
@@ -341,16 +372,6 @@ export class UtilitiesService {
       updatedAt: new Date().toISOString(),
     };
   }
-}
-
-function moneyValue(value: string | number | null) {
-  if (typeof value === "number") return value;
-  if (!value) return 0;
-  return Number(value);
-}
-
-function decimalString(value: number) {
-  return Number.isInteger(value) ? String(value) : value.toFixed(3);
 }
 
 function monthStart(year: number, month: number) {

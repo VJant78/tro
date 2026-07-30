@@ -11,6 +11,7 @@ import { RoomsModule } from "./rooms/rooms.module.js";
 import { RbacGuard } from "./security/rbac.guard.js";
 import { TenantsModule } from "./tenants/tenants.module.js";
 import { UtilitiesModule } from "./utilities/utilities.module.js";
+import { TenancyWorkflowModule } from "./workflows/tenancy-workflow.module.js";
 
 @Module({
   imports: [
@@ -21,6 +22,7 @@ import { UtilitiesModule } from "./utilities/utilities.module.js";
     PricingModule,
     UtilitiesModule,
     BillingModule,
+    TenancyWorkflowModule,
   ],
   controllers: [HealthController],
   providers: [

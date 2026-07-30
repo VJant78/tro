@@ -40,6 +40,47 @@ Phase 2 can:
 - Docker Compose cho local: web, api, postgres, optional redis/cache.
 - Healthcheck cho API va database.
 
+### Local Docker Compose
+
+Repo hien co cac file:
+
+- `apps/api/Dockerfile`: build API NestJS va chay `prisma migrate deploy` truoc khi start server.
+- `apps/web/Dockerfile`: build Vite app va serve static files bang nginx.
+- `docker-compose.yml`: chay `postgres`, `api`, `web` cho local smoke.
+
+Lenh chay:
+
+```bash
+docker compose up --build
+```
+
+Endpoint local:
+
+- Web: `http://localhost:3000`
+- API health: `http://localhost:4000/api/v1/health`
+- PostgreSQL: `localhost:5432`, database/user/password mac dinh deu la `tro`.
+
+Lenh dung:
+
+```bash
+docker compose down
+```
+
+Neu muon xoa database volume local:
+
+```bash
+docker compose down -v
+```
+
+Bien production bat buoc phai doi truoc khi public:
+
+- `DATABASE_URL`
+- `SESSION_SECRET`
+- `RECEIPT_PREVIEW_SECRET`
+- `VITE_API_BASE_URL`
+
+Gia tri secret trong `docker-compose.yml` chi dung cho local smoke, khong duoc dung cho production.
+
 ## CI/CD
 
 Pipeline toi thieu:

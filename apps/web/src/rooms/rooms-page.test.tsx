@@ -52,10 +52,12 @@ describe("RoomsPage", () => {
 
     expect(await screen.findByText("A-101")).toBeInTheDocument();
 
-    await user.click(screen.getByRole("button", { name: "Tao phong" }));
-    await user.type(screen.getByLabelText("Ma phong"), "B-202");
-    await user.type(screen.getByLabelText("Ten phong"), "Phong B202");
-    await user.click(screen.getByRole("button", { name: "Tao" }));
+    await user.click(screen.getByRole("button", { name: "Tạo phòng" }));
+    await user.type(screen.getByLabelText("Mã phòng"), "B-202");
+    await user.type(screen.getByLabelText("Tên phòng"), "Phong B202");
+    await user.click(
+      screen.getAllByRole("button", { name: "Tạo phòng" }).at(-1)!,
+    );
 
     await waitFor(() => {
       expect(globalThis.fetch).toHaveBeenCalledWith(
@@ -67,13 +69,71 @@ describe("RoomsPage", () => {
 
   it("shows API errors", async () => {
     vi.mocked(globalThis.fetch).mockResolvedValueOnce(
-      jsonResponse({ error: { message: "Authentication required" } }, 401),
+      jsonResponse(
+        {
+          error: {
+            code: "AUTHENTICATION_REQUIRED",
+            message: "Authentication required",
+          },
+        },
+        401,
+      ),
     );
 
     render(<RoomsPage />);
 
     expect(await screen.findByRole("alert")).toHaveTextContent(
-      "Authentication required",
+      "Phiên đăng nhập đã hết hạn. Vui lòng đăng nhập lại.",
+    );
+  });
+
+  it("opens receipt history from an occupied room", async () => {
+    const occupiedRoom = {
+      ...room,
+      status: "OCCUPIED",
+      currentOccupancy: {
+        tenancyId: "tenancy-1",
+        representativeTenantId: "tenant-1",
+        representativeName: "Nguyen Van A",
+        startedOn: "2026-07-01",
+        memberCount: 1,
+        coTenantCount: 0,
+        occupants: [
+          {
+            tenantId: "tenant-1",
+            fullName: "Nguyen Van A",
+            phone: null,
+            role: "REPRESENTATIVE",
+            joinedOn: "2026-07-01",
+          },
+        ],
+      },
+    };
+    vi.mocked(globalThis.fetch).mockImplementation(async (input) => {
+      const url = String(input);
+      if (url.includes("/rooms?")) {
+        return jsonResponse({
+          data: [occupiedRoom],
+          page: { limit: 50, nextCursor: null, hasMore: false },
+        });
+      }
+      if (url.includes("/tenancies/tenancy-1/receipts?")) {
+        return jsonResponse({
+          data: [],
+          page: { limit: 20, nextCursor: null, hasMore: false },
+        });
+      }
+      return jsonResponse({ error: { message: "Not found" } }, 404);
+    });
+
+    const user = userEvent.setup();
+    render(<RoomsPage />);
+
+    await user.click(
+      await screen.findByRole("button", { name: "Lịch sử thu" }),
+    );
+    expect(await screen.findByRole("dialog")).toHaveTextContent(
+      "Chưa có lần thu tiền",
     );
   });
 });

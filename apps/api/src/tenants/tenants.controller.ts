@@ -22,15 +22,15 @@ import {
   idParamSchema,
   memberParamSchema,
   tenancyCreateSchema,
-  tenancyEndSchema,
   tenancyMemberLeaveSchema,
   tenancyMemberTransferSchema,
-  tenancyTransferSchema,
+  representativeChangeSchema,
   tenantCreateSchema,
   tenantListQuerySchema,
   tenantUpdateSchema,
 } from "./tenants.schemas.js";
 import { TenantsService } from "./tenants.service.js";
+import type { TenancyRecord, TenantRecord } from "./tenants.types.js";
 
 interface RequestWithUser extends Request {
   user?: {
@@ -47,17 +47,27 @@ export class TenantsController {
   ) {}
 
   @Get("tenants")
-  list(@Query() query: unknown) {
-    return this.tenants.list(parseRequest(tenantListQuerySchema, query));
+  async list(@Query() query: unknown, @Req() request: RequestWithUser) {
+    const result = await this.tenants.list(
+      parseRequest(tenantListQuerySchema, query),
+    );
+    return request.user?.role === "VIEWER"
+      ? { ...result, data: result.data.map(maskTenantForViewer) }
+      : result;
   }
 
   @Get("tenants/:id")
-  async detail(@Param() params: unknown) {
+  async detail(@Param() params: unknown, @Req() request: RequestWithUser) {
     const { id } = parseRequest(idParamSchema, params);
     const tenant = await this.tenants.findTenantById(id);
     if (!tenant) throw new TenantNotFoundException();
     const tenancies = await this.tenants.listTenancies(id);
-    return { ...tenant, tenancies };
+    return request.user?.role === "VIEWER"
+      ? {
+          ...maskTenantForViewer(tenant),
+          tenancies: tenancies.map(maskTenancyForViewer),
+        }
+      : { ...tenant, tenancies };
   }
 
   @Roles("OWNER", "MANAGER", "STAFF")
@@ -119,37 +129,20 @@ export class TenantsController {
   }
 
   @Roles("OWNER", "MANAGER", "STAFF")
-  @Patch("tenancies/:id/end")
-  async endTenancy(
+  @Post("tenancies/:id/change-representative")
+  async changeRepresentative(
     @Param() params: unknown,
     @Body() body: unknown,
     @Req() request: RequestWithUser,
   ) {
     const { id } = parseRequest(idParamSchema, params);
-    const tenancy = await this.tenants.endTenancy(
+    const result = await this.tenants.changeRepresentative(
       id,
-      parseRequest(tenancyEndSchema, body),
+      parseRequest(representativeChangeSchema, body),
       request.user?.id,
     );
-    if (!tenancy) throw new TenancyNotFoundException();
-    return tenancy;
-  }
-
-  @Roles("OWNER", "MANAGER", "STAFF")
-  @Post("tenancies/:id/transfer")
-  async transferTenancy(
-    @Param() params: unknown,
-    @Body() body: unknown,
-    @Req() request: RequestWithUser,
-  ) {
-    const { id } = parseRequest(idParamSchema, params);
-    const tenancy = await this.tenants.transferTenancy(
-      id,
-      parseRequest(tenancyTransferSchema, body),
-      request.user?.id,
-    );
-    if (!tenancy) throw new TenancyNotFoundException();
-    return tenancy;
+    if (!result) throw new TenancyNotFoundException();
+    return result;
   }
 
   @Roles("OWNER", "MANAGER", "STAFF")
@@ -187,4 +180,24 @@ export class TenantsController {
     if (!tenancy) throw new TenancyNotFoundException();
     return tenancy;
   }
+}
+
+function maskTenantForViewer(tenant: TenantRecord): TenantRecord {
+  return {
+    ...tenant,
+    phone: null,
+    identityNumber: null,
+    permanentAddress: null,
+    emergencyContactName: null,
+    emergencyContactPhone: null,
+    notes: null,
+  };
+}
+
+function maskTenancyForViewer(tenancy: TenancyRecord): TenancyRecord {
+  return {
+    ...tenancy,
+    notes: null,
+    members: tenancy.members.map((member) => ({ ...member, phone: null })),
+  };
 }

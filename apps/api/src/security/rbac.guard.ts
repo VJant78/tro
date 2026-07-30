@@ -15,6 +15,7 @@ interface RequestWithUser extends Request {
   user?: {
     id: string;
     role: AppRole;
+    propertyId: string;
   };
 }
 
@@ -39,7 +40,13 @@ export class RbacGuard implements CanActivate {
     );
     const user =
       request.user ??
-      (session ? { id: session.userId, role: session.role } : undefined);
+      (session
+        ? {
+            id: session.userId,
+            role: session.role,
+            propertyId: session.propertyId,
+          }
+        : undefined);
 
     if (!user) {
       throw new UnauthorizedException("Authentication required");
