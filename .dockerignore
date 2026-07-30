@@ -1,0 +1,16 @@
+node_modules
+**/node_modules
+dist
+**/dist
+build
+**/build
+.next
+coverage
+.git
+.env
+.env.*
+!.env.example
+reports/*
+!reports/.gitkeep
+*.log
+npm-debug.log*

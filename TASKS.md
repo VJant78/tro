@@ -97,6 +97,8 @@ Technical constraints: reuse stack va payment/account ledger hien co; mot source
 
 - [ ] B-003 | Phase 2 | Docker validation | Agent: DevOps | Dependency: P2-002, Docker installed/available | Scope: Docker files | AC: local compose can start API/web/db | Verify: `docker compose up` smoke | Risk: Medium
 
+  Update 30/07/2026: DevOps Docker files added (`apps/api/Dockerfile`, `apps/web/Dockerfile`, `apps/web/nginx.conf`, `docker-compose.yml`, `.dockerignore`) and deployment docs updated. Local Docker smoke remains blocked because this machine does not currently expose the `docker` CLI/daemon.
+
 ## Review
 
 - [ ] PROJECT-001 | Phase 1 | Product requirements package | Agent: Product | Scope: `docs/product-brief.md`, `docs/business-rules.md`, `docs/user-stories.md`, `docs/acceptance-criteria.md`, `docs/specs/PRODUCT_BRIEF.md` | AC: product brief, stories, testable AC, non-goals, constraints | Verify: manual Lead/QA review | Risk: Medium
