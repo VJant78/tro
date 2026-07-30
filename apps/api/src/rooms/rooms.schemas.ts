@@ -1,12 +1,9 @@
 import { z } from "zod";
+import { boundedMoneySchema } from "../platform/numeric.js";
 
 export const defaultPropertyId = "00000000-0000-4000-8000-000000000002";
 
 const uuidSchema = z.uuid();
-const moneySchema = z
-  .union([z.string(), z.number()])
-  .transform((value) => String(value).trim())
-  .refine((value) => /^\d+$/.test(value), "Must be a non-negative integer");
 
 export const roomStatusSchema = z.enum([
   "VACANT",
@@ -61,11 +58,11 @@ export const roomCreateSchema = z.object({
   name: z.string().trim().min(1).max(120),
   roomType: z.string().trim().max(80).nullable().optional(),
   status: roomStatusSchema.default("VACANT"),
-  defaultRentAmount: moneySchema.default("0"),
+  defaultRentAmount: boundedMoneySchema.default("0"),
   defaultBillingCycleType: billingCycleTypeSchema.default("MONTHLY"),
   defaultBillingCycleCount: z.coerce.number().int().min(1).max(120).default(1),
   maxOccupants: z.coerce.number().int().min(1).max(100).default(1),
-  depositAmount: moneySchema.default("0"),
+  depositAmount: boundedMoneySchema.default("0"),
   notes: z.string().trim().max(1000).nullable().optional(),
 });
 

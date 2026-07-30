@@ -4,6 +4,7 @@ import type {
   DebtSummaryRecord,
   InvoiceRecord,
 } from "./billing.types.js";
+import { moneyString, moneyValue } from "../platform/numeric.js";
 
 export function buildDebtSummaries(
   invoices: InvoiceRecord[],
@@ -16,7 +17,7 @@ export function buildDebtSummaries(
     if (
       invoice.status === "PAID" ||
       invoice.status === "CANCELLED" ||
-      Number(invoice.outstandingAmount) <= 0 ||
+      moneyValue(invoice.outstandingAmount) === 0n ||
       (query.roomId && invoice.roomId !== query.roomId) ||
       (query.payerTenantId && invoice.payerTenantId !== query.payerTenantId)
     ) {
@@ -41,8 +42,9 @@ export function buildDebtSummaries(
       } satisfies DebtSummaryRecord);
 
     current.invoiceCount += 1;
-    current.totalOutstanding = String(
-      Number(current.totalOutstanding) + Number(invoice.outstandingAmount),
+    current.totalOutstanding = moneyString(
+      moneyValue(current.totalOutstanding) +
+        moneyValue(invoice.outstandingAmount),
     );
     current.nearestDueOn = nearestDate(current.nearestDueOn, invoice.dueOn);
     current.daysOverdue = Math.max(
@@ -65,7 +67,9 @@ export function buildDebtSummaries(
       if (left.daysOverdue !== right.daysOverdue) {
         return right.daysOverdue - left.daysOverdue;
       }
-      return Number(right.totalOutstanding) - Number(left.totalOutstanding);
+      const leftAmount = moneyValue(left.totalOutstanding);
+      const rightAmount = moneyValue(right.totalOutstanding);
+      return rightAmount === leftAmount ? 0 : rightAmount > leftAmount ? 1 : -1;
     });
 }
 

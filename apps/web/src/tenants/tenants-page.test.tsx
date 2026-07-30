@@ -31,6 +31,7 @@ const room = {
   notes: null,
   currentOccupancy: null,
 };
+const coTenantId = "00000000-0000-4000-8000-000000000302";
 
 const activeTenant = {
   ...tenant,
@@ -69,7 +70,7 @@ const activeTenant = {
           leftOn: null,
         },
         {
-          tenantId: "00000000-0000-4000-8000-000000000302",
+          tenantId: coTenantId,
           fullName: "Tran Thi B",
           phone: "0900000002",
           role: "CO_TENANT",
@@ -115,12 +116,14 @@ describe("TenantsPage", () => {
     const user = userEvent.setup();
     render(<TenantsPage />);
 
-    expect(await screen.findByText("Nguyen Van A")).toBeInTheDocument();
-    expect(screen.getByText("Chua vao phong")).toBeInTheDocument();
+    expect(await screen.findAllByText("Nguyen Van A")).toHaveLength(2);
+    expect(screen.getByText("Chưa ở phòng nào")).toBeInTheDocument();
 
-    await user.click(screen.getByRole("button", { name: "Tao ho so" }));
-    await user.type(screen.getByLabelText("Ho ten"), "Tran Thi B");
-    await user.click(screen.getByRole("button", { name: "Tao" }));
+    await user.click(screen.getByRole("button", { name: "Tạo hồ sơ" }));
+    await user.type(screen.getByLabelText("Họ tên"), "Tran Thi B");
+    await user.click(
+      screen.getAllByRole("button", { name: "Tạo hồ sơ" }).at(-1)!,
+    );
 
     await waitFor(() => {
       expect(globalThis.fetch).toHaveBeenCalledWith(
@@ -131,8 +134,32 @@ describe("TenantsPage", () => {
   });
 
   it("shows current room details and co-tenants", async () => {
-    vi.mocked(globalThis.fetch).mockImplementation(async (input) => {
+    const user = userEvent.setup();
+    vi.mocked(globalThis.fetch).mockImplementation(async (input, init) => {
       const url = String(input);
+      if (
+        url.endsWith(
+          `/tenancies/${activeTenant.currentTenancy.tenancyId}/change-representative`,
+        ) &&
+        init?.method === "POST"
+      ) {
+        return jsonResponse(
+          {
+            tenancyId: activeTenant.currentTenancy.tenancyId,
+            previousRepresentative: {
+              tenantId: tenant.id,
+              fullName: tenant.fullName,
+            },
+            newRepresentative: {
+              tenantId: coTenantId,
+              fullName: "Tran Thi B",
+            },
+            effectiveAt: "2026-08-10T00:00:00.000Z",
+            replayed: false,
+          },
+          201,
+        );
+      }
       if (url.includes("/tenants?")) {
         return jsonResponse({
           data: [activeTenant],
@@ -150,17 +177,72 @@ describe("TenantsPage", () => {
 
     render(<TenantsPage />);
 
-    expect((await screen.findAllByText("Dang o")).length).toBeGreaterThan(0);
-    expect(screen.getAllByText(/Phong A-101/).length).toBeGreaterThan(0);
+    expect((await screen.findAllByText("Đang ở")).length).toBeGreaterThan(0);
     expect(screen.getByText("Tran Thi B")).toBeInTheDocument();
-    expect(screen.getByLabelText("Phong")).toBeDisabled();
-    expect(screen.getByLabelText("Phong")).toHaveValue(room.id);
-    expect(screen.getByLabelText("Ngay bat dau")).toBeDisabled();
-    expect(screen.getByLabelText("Ngay bat dau")).toHaveValue("2026-08-01");
+    expect(screen.getByLabelText("Phòng hiện tại")).toBeDisabled();
+    expect(screen.getByLabelText("Phòng hiện tại")).toHaveValue(room.id);
     expect(
-      screen.getByRole("button", { name: "Chuyen nguoi nay" }),
-    ).toBeDisabled();
-    expect(screen.getByRole("button", { name: "Roi phong" })).toBeDisabled();
+      screen.queryByRole("button", { name: "Chuyển người này" }),
+    ).not.toBeInTheDocument();
+    expect(
+      screen.queryByRole("button", { name: "Rời phòng" }),
+    ).not.toBeInTheDocument();
+    expect(
+      screen.getByRole("button", { name: "Đổi người đại diện" }),
+    ).toBeEnabled();
+
+    await user.click(
+      screen.getByRole("button", { name: "Đổi người đại diện" }),
+    );
+    await user.selectOptions(
+      screen.getByLabelText("Người đại diện mới"),
+      coTenantId,
+    );
+    await user.click(
+      screen.getByRole("button", { name: "Xác nhận đổi đại diện" }),
+    );
+    await waitFor(() => {
+      expect(globalThis.fetch).toHaveBeenCalledWith(
+        expect.stringContaining("/change-representative"),
+        expect.objectContaining({ method: "POST" }),
+      );
+    });
+  });
+
+  it("shows tenancy credit as read-only in the whole-room close flow", async () => {
+    vi.mocked(globalThis.fetch).mockImplementation(async (input) => {
+      const url = String(input);
+      if (url.includes("/tenants?")) {
+        return jsonResponse({
+          data: [activeTenant],
+          page: { limit: 50, nextCursor: null, hasMore: false },
+        });
+      }
+      if (url.endsWith(`/tenants/${tenant.id}`)) {
+        return jsonResponse(activeTenant);
+      }
+      if (url.includes("/rooms?")) return jsonResponse({ data: [room] });
+      if (url.includes("/utility-readings?")) return jsonResponse([]);
+      if (url.includes("/receipts?limit=1")) {
+        return jsonResponse({
+          data: [],
+          page: { limit: 1, nextCursor: null, hasMore: false },
+          summary: { creditBalance: "230000", receiptCount: 5 },
+        });
+      }
+      return jsonResponse({ error: { message: "Not found" } }, 404);
+    });
+
+    const user = userEvent.setup();
+    render(<TenantsPage />);
+
+    await user.click(
+      await screen.findByRole("button", { name: "Kết thúc thuê" }),
+    );
+
+    expect(screen.queryByLabelText("Đã trả trước")).not.toBeInTheDocument();
+    expect(await screen.findByText("230.000 VND")).toBeInTheDocument();
+    expect(screen.getByText("5 lần thu")).toBeInTheDocument();
   });
 });
 

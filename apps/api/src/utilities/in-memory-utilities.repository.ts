@@ -1,4 +1,7 @@
 import { randomUUID } from "node:crypto";
+import { Inject, Injectable } from "@nestjs/common";
+import { AuditService } from "../audit/audit.service.js";
+import { moneyString, moneyValue } from "../platform/numeric.js";
 import type {
   SettlementRecord,
   SettlementSaveInput,
@@ -20,10 +23,13 @@ type StoredAccountEntry = {
   deletedAt: string | null;
 };
 
+@Injectable()
 export class InMemoryUtilitiesRepository implements UtilitiesRepository {
   private readonly readings: StoredReading[] = [];
   private readonly settlements: StoredSettlement[] = [];
   private readonly accountEntries: StoredAccountEntry[] = [];
+
+  constructor(@Inject(AuditService) private readonly audit: AuditService) {}
 
   async listReadings(query: UtilityReadingListQuery) {
     return this.readings
@@ -129,6 +135,24 @@ export class InMemoryUtilitiesRepository implements UtilitiesRepository {
     return reading ? stripReadingDeletedAt(reading) : null;
   }
 
+  async findLatestFinalizedReading(input: {
+    roomId: string;
+    beforeOrOn: string;
+  }) {
+    const reading = this.readings
+      .filter(
+        (item) =>
+          !item.deletedAt &&
+          item.roomId === input.roomId &&
+          item.status === "FINALIZED" &&
+          item.billingPeriodEnd <= input.beforeOrOn,
+      )
+      .sort((left, right) =>
+        right.billingPeriodEnd.localeCompare(left.billingPeriodEnd),
+      )[0];
+    return reading ? stripReadingDeletedAt(reading) : null;
+  }
+
   async listSettlements(input: {
     billingYear?: number;
     billingMonth?: number;
@@ -163,7 +187,7 @@ export class InMemoryUtilitiesRepository implements UtilitiesRepository {
     return settlement ? stripSettlementDeletedAt(settlement) : null;
   }
 
-  async createSettlement(input: SettlementSaveInput) {
+  async createSettlement(input: SettlementSaveInput, actorUserId?: string) {
     const now = new Date().toISOString();
     const id = randomUUID();
     const settlement: StoredSettlement = {
@@ -175,28 +199,14 @@ export class InMemoryUtilitiesRepository implements UtilitiesRepository {
       deletedAt: null,
     };
     this.settlements.push(settlement);
-    if (Number(input.prepaidAmount) > 0) {
-      this.accountEntries.push({
-        id: randomUUID(),
-        tenantId: settlement.representativeTenantId,
-        settlementId: id,
-        entryType: "PREPAYMENT",
-        amount: input.prepaidAmount,
-        effectiveOn: settlement.periodEnd,
-        deletedAt: null,
-      });
-    }
-    if (Number(input.creditAppliedAmount) > 0) {
-      this.accountEntries.push({
-        id: randomUUID(),
-        tenantId: settlement.representativeTenantId,
-        settlementId: id,
-        entryType: "CREDIT_APPLIED",
-        amount: input.creditAppliedAmount,
-        effectiveOn: settlement.periodEnd,
-        deletedAt: null,
-      });
-    }
+    await this.audit.record({
+      action: "ISSUE_INVOICE",
+      entityType: "settlement",
+      entityId: settlement.id,
+      actorUserId,
+      newValues: stripSettlementDeletedAt(settlement),
+      metadata: { mode: "settlement-finalized" },
+    });
     return stripSettlementDeletedAt(settlement);
   }
 
@@ -216,19 +226,26 @@ export class InMemoryUtilitiesRepository implements UtilitiesRepository {
     return settlement ? stripSettlementDeletedAt(settlement) : null;
   }
 
-  async accountBalance(input: { tenantId: string; effectiveOn?: string }) {
+  async accountBalance(input: { tenancyId: string; effectiveOn?: string }) {
     const balance = this.accountEntries
-      .filter((entry) => entry.tenantId === input.tenantId && !entry.deletedAt)
+      .filter(
+        (entry) =>
+          this.settlements.some(
+            (settlement) =>
+              settlement.id === entry.settlementId &&
+              settlement.tenancyId === input.tenancyId,
+          ) && !entry.deletedAt,
+      )
       .filter(
         (entry) => !input.effectiveOn || entry.effectiveOn <= input.effectiveOn,
       )
       .reduce((total, entry) => {
-        const amount = Number(entry.amount);
+        const amount = moneyValue(entry.amount);
         return entry.entryType === "PREPAYMENT"
           ? total + amount
           : total - amount;
-      }, 0);
-    return String(Math.max(0, balance));
+      }, 0n);
+    return moneyString(balance > 0n ? balance : 0n);
   }
 }
 

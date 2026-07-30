@@ -1,6 +1,13 @@
 import { FormEvent, useEffect, useMemo, useState } from "react";
 import { Button, StatusBadge } from "@repo/ui";
-import { ApiError, apiFetch } from "../api";
+import { apiFetch, messageFor } from "../api";
+import {
+  formatDate,
+  formatDateTime,
+  formatMoney,
+  makeIdempotencyKey,
+  normalizeMoneyInput,
+} from "../format";
 import type {
   DebtStatus,
   DebtSummary,
@@ -16,19 +23,32 @@ const emptyPayment = {
   notes: "",
 };
 
+type PaymentAttempt = {
+  invoiceId: string;
+  amount: string;
+  method: PaymentMethod;
+  notes: string;
+  idempotencyKey: string;
+  paidAt: string;
+};
+
 export function DebtsPage() {
   const [debts, setDebts] = useState<DebtSummary[]>([]);
   const [rooms, setRooms] = useState<Room[]>([]);
   const [tenants, setTenants] = useState<Tenant[]>([]);
-  const [filters, setFilters] = useState({
-    roomId: "",
+  const [filters, setFilters] = useState(() => ({
+    roomId: new URLSearchParams(window.location.search).get("roomId") ?? "",
     payerTenantId: "",
     status: "" as DebtStatus | "",
-  });
+  }));
   const [selectedDebtKey, setSelectedDebtKey] = useState("");
   const [selectedInvoiceId, setSelectedInvoiceId] = useState("");
   const [payment, setPayment] = useState(emptyPayment);
+  const [paymentAttempt, setPaymentAttempt] = useState<PaymentAttempt | null>(
+    null,
+  );
   const [error, setError] = useState<string | null>(null);
+  const [success, setSuccess] = useState<string | null>(null);
   const [isLoading, setIsLoading] = useState(true);
   const [isSaving, setIsSaving] = useState(false);
 
@@ -99,6 +119,10 @@ export function DebtsPage() {
     }));
   }, [selectedInvoice]);
 
+  useEffect(() => {
+    setPaymentAttempt(null);
+  }, [selectedInvoice?.id]);
+
   async function applyFilters(event: FormEvent<HTMLFormElement>) {
     event.preventDefault();
     await load();
@@ -111,18 +135,46 @@ export function DebtsPage() {
     }
     setIsSaving(true);
     setError(null);
+    setSuccess(null);
+    const confirmed = window.confirm(
+      `Ghi nhận đã thu ${formatMoney(payment.amount)} cho hóa đơn ${selectedInvoice.invoiceNumber}?`,
+    );
+    if (!confirmed) {
+      setIsSaving(false);
+      return;
+    }
+    const attempt =
+      paymentAttempt?.invoiceId === selectedInvoice.id &&
+      paymentAttempt.amount === payment.amount &&
+      paymentAttempt.method === payment.method &&
+      paymentAttempt.notes === payment.notes
+        ? paymentAttempt
+        : {
+            invoiceId: selectedInvoice.id,
+            amount: payment.amount,
+            method: payment.method,
+            notes: payment.notes,
+            idempotencyKey: makeIdempotencyKey(),
+            paidAt: new Date().toISOString(),
+          };
+    setPaymentAttempt(attempt);
     try {
       await apiFetch("/payments", {
         method: "POST",
-        headers: { "Idempotency-Key": crypto.randomUUID() },
+        headers: { "Idempotency-Key": attempt.idempotencyKey },
         body: JSON.stringify({
           invoiceId: selectedInvoice.id,
           amount: payment.amount,
           method: payment.method,
+          paidAt: attempt.paidAt,
           notes: payment.notes || null,
         }),
       });
+      setSuccess(
+        `Đã thu ${formatMoney(payment.amount)} cho hóa đơn ${selectedInvoice.invoiceNumber}.`,
+      );
       setPayment(emptyPayment);
+      setPaymentAttempt(null);
       await load();
     } catch (saveError) {
       setError(messageFor(saveError));
@@ -136,23 +188,23 @@ export function DebtsPage() {
       <section className="rooms-list" aria-labelledby="debts-title">
         <div className="section-heading">
           <div>
-            <h1 id="debts-title">Cong no</h1>
-            <p>{formatMoney(totalDebt)} dang can thu</p>
+            <h1 id="debts-title">Công nợ</h1>
+            <p>{formatMoney(totalDebt)} đang cần thu</p>
           </div>
           <StatusBadge tone={totalDebt > 0 ? "warning" : "success"}>
-            {totalDebt > 0 ? "Con no" : "Da het no"}
+            {totalDebt > 0 ? "Còn nợ" : "Đã hết nợ"}
           </StatusBadge>
         </div>
 
         <form className="toolbar debts-toolbar" onSubmit={applyFilters}>
           <select
-            aria-label="Loc phong"
+            aria-label="Lọc phòng"
             onChange={(event) =>
               setFilters({ ...filters, roomId: event.target.value })
             }
             value={filters.roomId}
           >
-            <option value="">Tat ca phong</option>
+            <option value="">Tất cả phòng</option>
             {rooms.map((room) => (
               <option key={room.id} value={room.id}>
                 {room.code}
@@ -160,13 +212,13 @@ export function DebtsPage() {
             ))}
           </select>
           <select
-            aria-label="Loc nguoi thue"
+            aria-label="Lọc người thuê"
             onChange={(event) =>
               setFilters({ ...filters, payerTenantId: event.target.value })
             }
             value={filters.payerTenantId}
           >
-            <option value="">Tat ca nguoi thue</option>
+            <option value="">Tất cả người thuê</option>
             {tenants.map((tenant) => (
               <option key={tenant.id} value={tenant.id}>
                 {tenant.fullName}
@@ -174,7 +226,7 @@ export function DebtsPage() {
             ))}
           </select>
           <select
-            aria-label="Loc trang thai"
+            aria-label="Lọc trạng thái"
             onChange={(event) =>
               setFilters({
                 ...filters,
@@ -183,18 +235,30 @@ export function DebtsPage() {
             }
             value={filters.status}
           >
-            <option value="">Tat ca trang thai</option>
-            <option value="OUTSTANDING">Dang no</option>
-            <option value="PARTIALLY_PAID">Thu mot phan</option>
-            <option value="DUE_TODAY">Den han hom nay</option>
-            <option value="OVERDUE">Qua han</option>
+            <option value="">Tất cả trạng thái</option>
+            <option value="OUTSTANDING">Đang nợ</option>
+            <option value="PARTIALLY_PAID">Thu một phần</option>
+            <option value="DUE_TODAY">Đến hạn hôm nay</option>
+            <option value="OVERDUE">Quá hạn</option>
           </select>
-          <Button type="submit">Loc</Button>
+          <Button type="submit">Lọc</Button>
         </form>
 
         {error ? (
           <div className="notice error" role="alert">
-            {error}
+            <span>{error}</span>
+            <Button
+              type="button"
+              variant="secondary"
+              onClick={() => void load()}
+            >
+              Thử lại
+            </Button>
+          </div>
+        ) : null}
+        {success ? (
+          <div className="notice success" aria-live="polite">
+            {success}
           </div>
         ) : null}
 
@@ -205,7 +269,7 @@ export function DebtsPage() {
           </div>
         ) : debts.length === 0 ? (
           <div className="empty-state">
-            <strong>Chua co cong no</strong>
+            <strong>Không có công nợ theo bộ lọc</strong>
           </div>
         ) : (
           <div className="room-list-stack">
@@ -225,12 +289,10 @@ export function DebtsPage() {
                 type="button"
               >
                 <span>
-                  <strong>
-                    Phong {debt.roomCode ?? debt.roomId.slice(0, 8)}
-                  </strong>
-                  <small>{debt.payerTenantName ?? "Nguoi dai dien"}</small>
+                  <strong>Phòng {debt.roomCode ?? "-"}</strong>
+                  <small>{debt.payerTenantName ?? "Chưa xác định"}</small>
                   <small>
-                    {debt.invoiceCount} hoa don - han gan nhat{" "}
+                    {debt.invoiceCount} hóa đơn · hạn gần nhất{" "}
                     {formatDate(debt.nearestDueOn)}
                   </small>
                 </span>
@@ -249,11 +311,11 @@ export function DebtsPage() {
       <section className="room-detail" aria-labelledby="debt-detail-title">
         <div className="section-heading">
           <div>
-            <h2 id="debt-detail-title">Chi tiet cong no</h2>
+            <h2 id="debt-detail-title">Chi tiết công nợ</h2>
             <p>
               {selectedDebt
-                ? `Phong ${selectedDebt.roomCode ?? selectedDebt.roomId.slice(0, 8)}`
-                : "Chon cong no"}
+                ? `Phòng ${selectedDebt.roomCode ?? "-"}`
+                : "Chọn công nợ"}
             </p>
           </div>
         </div>
@@ -262,19 +324,19 @@ export function DebtsPage() {
           <>
             <div className="settlement-grid invoice-facts">
               <Fact
-                label="Nguoi dai dien"
+                label="Người đại diện"
                 value={selectedDebt.payerTenantName ?? "-"}
               />
               <Fact
-                label="Tong no"
+                label="Tổng nợ"
                 value={formatMoney(selectedDebt.totalOutstanding)}
               />
               <Fact
-                label="Han gan nhat"
+                label="Hạn gần nhất"
                 value={formatDate(selectedDebt.nearestDueOn)}
               />
               <Fact
-                label="Trang thai"
+                label="Trạng thái"
                 value={debtLabel(
                   selectedDebt.debtStatus,
                   selectedDebt.daysOverdue,
@@ -311,31 +373,34 @@ export function DebtsPage() {
 
             <div className="settlement-grid invoice-facts">
               <Fact
-                label="Tong hoa don"
+                label="Tổng hóa đơn"
                 value={formatMoney(selectedInvoice.totalAmount)}
               />
               <Fact
-                label="Da thu"
+                label="Đã thu"
                 value={formatMoney(selectedInvoice.paidAmount)}
               />
               <Fact
-                label="Con thu"
+                label="Còn thu"
                 value={formatMoney(selectedInvoice.outstandingAmount)}
               />
-              <Fact label="Han thu" value={formatDate(selectedInvoice.dueOn)} />
+              <Fact label="Hạn thu" value={formatDate(selectedInvoice.dueOn)} />
             </div>
 
             <div className="invoice-items">
               {selectedInvoice.paymentAllocations.length === 0 ? (
                 <div className="empty-state">
-                  <strong>Chua co thanh toan</strong>
+                  <strong>Chưa có thanh toán</strong>
                 </div>
               ) : (
                 selectedInvoice.paymentAllocations.map((allocation) => (
-                  <div className="invoice-item-row" key={allocation.id}>
+                  <div
+                    className="invoice-item-row"
+                    key={`${allocation.paymentNumber ?? "payment"}-${allocation.allocatedAt}`}
+                  >
                     <span>
                       <strong>
-                        {allocation.paymentNumber ?? allocation.paymentId}
+                        {allocation.paymentNumber ?? "Thanh toán"}
                       </strong>
                       <small>
                         {methodLabel(allocation.paymentMethod)} -{" "}
@@ -356,17 +421,23 @@ export function DebtsPage() {
             >
               <div className="form-grid">
                 <label className="field">
-                  So tien thu
+                  Số tiền thu
                   <input
                     inputMode="numeric"
                     onChange={(event) =>
-                      setPayment({ ...payment, amount: event.target.value })
+                      setPayment({
+                        ...payment,
+                        amount: normalizeMoneyInput(event.target.value),
+                      })
                     }
                     value={payment.amount}
                   />
+                  <small className="field-hint">
+                    Còn tối đa {formatMoney(selectedInvoice.outstandingAmount)}
+                  </small>
                 </label>
                 <label className="field">
-                  Hinh thuc
+                  Hình thức
                   <select
                     onChange={(event) =>
                       setPayment({
@@ -376,14 +447,14 @@ export function DebtsPage() {
                     }
                     value={payment.method}
                   >
-                    <option value="CASH">Tien mat</option>
-                    <option value="BANK_TRANSFER">Chuyen khoan</option>
-                    <option value="OTHER">Khac</option>
+                    <option value="CASH">Tiền mặt</option>
+                    <option value="BANK_TRANSFER">Chuyển khoản</option>
+                    <option value="OTHER">Khác</option>
                   </select>
                 </label>
               </div>
               <label className="field">
-                Ghi chu
+                Ghi chú
                 <textarea
                   onChange={(event) =>
                     setPayment({ ...payment, notes: event.target.value })
@@ -394,16 +465,21 @@ export function DebtsPage() {
               <div className="form-actions">
                 <Button
                   type="submit"
-                  disabled={isSaving || Number(payment.amount) <= 0}
+                  disabled={
+                    isSaving ||
+                    Number(payment.amount) <= 0 ||
+                    Number(payment.amount) >
+                      Number(selectedInvoice.outstandingAmount)
+                  }
                 >
-                  Thu nhanh
+                  {isSaving ? "Đang ghi nhận" : "Thu tiền"}
                 </Button>
               </div>
             </form>
           </>
         ) : (
           <div className="empty-state">
-            <strong>Chua chon cong no</strong>
+            <strong>Chưa chọn công nợ</strong>
           </div>
         )}
       </section>
@@ -431,36 +507,14 @@ function debtTone(status: DebtStatus) {
 }
 
 function debtLabel(status: DebtStatus, daysOverdue: number) {
-  if (status === "OVERDUE") return `Qua han ${daysOverdue} ngay`;
-  if (status === "DUE_TODAY") return "Den han hom nay";
-  if (status === "PARTIALLY_PAID") return "Thu mot phan";
-  return "Dang no";
+  if (status === "OVERDUE") return `Quá hạn ${daysOverdue} ngày`;
+  if (status === "DUE_TODAY") return "Đến hạn hôm nay";
+  if (status === "PARTIALLY_PAID") return "Thu một phần";
+  return "Đang nợ";
 }
 
 function methodLabel(method: PaymentMethod | null) {
-  if (method === "BANK_TRANSFER") return "Chuyen khoan";
-  if (method === "OTHER") return "Khac";
-  return "Tien mat";
-}
-
-function formatMoney(value: string | number) {
-  return new Intl.NumberFormat("vi-VN").format(Number(value)) + " VND";
-}
-
-function formatDate(value: string | null) {
-  if (!value) return "-";
-  return new Intl.DateTimeFormat("vi-VN").format(new Date(`${value}T00:00:00`));
-}
-
-function formatDateTime(value: string) {
-  return new Intl.DateTimeFormat("vi-VN", {
-    dateStyle: "short",
-    timeStyle: "short",
-  }).format(new Date(value));
-}
-
-function messageFor(error: unknown) {
-  if (error instanceof ApiError) return error.message;
-  if (error instanceof Error) return error.message;
-  return "Co loi xay ra";
+  if (method === "BANK_TRANSFER") return "Chuyển khoản";
+  if (method === "OTHER") return "Khác";
+  return "Tiền mặt";
 }

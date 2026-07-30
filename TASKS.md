@@ -6,14 +6,92 @@
 
 - [ ] P4-003 | Phase 4 | Monthly utility invoice job | Agent: Backend + Database + QA | Dependency: P4-002 | Scope: `apps/api/**`, `packages/database/**`, `tests/**` | AC: idempotent job, unique invoice source key, batch result | Verify: `npm run check`, cron integration tests | Risk: High
 - [ ] P7-001 | Phase 7 | Production hardening | Agent: Security + DevOps + QA | Dependency: P2-P6 | Scope: `.github/**`, Docker, docs, tests | AC: security review, Docker, CI/CD, backup/restore runbook | Verify: CI, E2E, smoke tests | Risk: High
+- [ ] P7-SEC-001 | Phase 7 | Production origin and CSRF protection | Agent: Security + Backend + QA | Dependency: UX-COMPLETE-001 | Due: before production release | Scope: `apps/api/**`, tests, security docs | AC: production origin allowlist, sensitive mutation CSRF/origin guard, negative tests | Risk: High
+- [ ] P7-SEC-002 | Phase 7 | Persistent multi-instance sessions | Agent: Security + Backend + DevOps + QA | Dependency: UX-COMPLETE-001 | Due: before multi-instance deployment | Scope: API auth/session, deployment config, tests | AC: persistent revocation, required strong secret, cookie expiry/hardening | Risk: High
+- [ ] P7-SEC-003 | Phase 7 | Distributed workflow lease and recovery worker | Agent: Backend + Database + QA | Dependency: UX-COMPLETE-001 | Due: before multi-instance deployment | Scope: `apps/api/**`, `packages/database/**`, tests | AC: database lease/CAS, stale command recovery, concurrency tests | Risk: High
+- [ ] P7-SEC-004 | Phase 7 | Login and financial endpoint rate limiting | Agent: Security + Backend + DevOps + QA | Dependency: UX-COMPLETE-001 | Due: before public exposure | Scope: API, monitoring/deployment config, tests | AC: actor/property/IP limits, stable 429, unusual-login alert | Risk: High
+
+## In Progress
+
+Chua co.
 
 ## Ready
 
 Chua co.
 
-## In Progress
+## Done - Phase 6.5
 
-Chua co.
+- [x] P6-005 | Phase 6.5 | Chi so dien nuoc tren hoa don va tra cuu hoa don theo phong | Agent: Product/BA + UI/UX + Architecture + Backend + Frontend + Database + QA + Security + Lead | Dependency: P4-002, P5-001, P6-003 | Scope: `docs/specs/INVOICE_USAGE_AND_ROOM_REPORT_*`, `apps/api/src/billing/**`, `apps/web/src/invoices/**`, `apps/web/src/reports/**`, tests | AC: `docs/specs/INVOICE_USAGE_AND_ROOM_REPORT_BRIEF.md` | Verify: API 20/20, Web invoice 3/3, PostgreSQL 4/4, desktop/mobile/print audit, build, E2E and dependency audit passed 30/07/2026 | Risk: High
+
+### P6-005 handoff
+
+1. Hoa don hien chi so dien/nuoc cu, moi, luong su dung, don gia va thanh tien tu snapshot bat bien; hoa don cu chi hydrate khi co lien ket finalized hop le va khong bi ghi nguoc.
+2. Bao cao loc theo phong, nam va thang; JSON/CSV dung chung property/room scope, moi dong co link mo dung hoa don qua `invoiceId`.
+3. Trang chi tiet ho tro in/Save as PDF bang trinh duyet, an thao tac thu tien voi VIEWER va xoa noi dung cu khi deep-link loi.
+4. API dung read DTO allowlist, khong tra raw metadata/pricing/source; unknown va cross-property resource cung tra `404`.
+5. Database review xac nhan khong can schema/migration/backfill cho phase nay; PostgreSQL integration test bao phu snapshot, room scope, legacy fallback va read-only invariant.
+6. QA responsive desktop/mobile dat: khong overflow, khong Axe violation, khong console error va khong failed request. Security dong `P6-005-SEC-001..006` va phe duyet phase release.
+
+Non-goals: khong tenant portal, public/signed sharing, server PDF storage, sua chi so tu hoa don, doi cong thuc utility/proration/FIFO/debt, chart hoac redesign ngoai pham vi.
+
+Residual: monthly report con co the toi uu aggregate/pagination khi du lieu lon; day la rui ro hieu nang, khong lam sai totals va khong chan phase. Public Internet van phu thuoc P7 Origin/CSRF va rate limiting/monitoring.
+
+## Done - Phase 6.4
+
+- [x] P6-004 | Phase 6.4 | Thu tien nhieu lan, FIFO cong no va so du tra truoc | Agent: Product/BA + Architecture + Database + Backend + Frontend + QA + Security + Lead | Dependency: P5-002, P6-001, UX-COMPLETE-001 | Scope: requirements/docs, `packages/database/**`, `apps/api/**`, `apps/web/**`, tests | AC: `docs/specs/DAILY_COLLECTIONS_BRIEF.md` va section Daily collections trong `docs/acceptance-criteria.md` | Verify: 87 workspace tests, 12 PostgreSQL P6 tests, build, 6 desktop/mobile audit checks, audit dependency; passed 30/07/2026 | Risk: Critical
+
+### P6-004 handoff
+
+1. Receipt thu nhieu lan duoc phan bo cong no FIFO; phan du thanh credit theo tenancy, khong theo nguoi dai dien.
+2. Settlement/invoice gross tu dong ap credit; whole-room transfer tru no cu roi chuyen lot credit con lai.
+3. OWNER/MANAGER duoc void bang reversal bat bien; STAFF/VIEWER khong duoc void va VIEWER nhan DTO da redact.
+4. Payment, allocation, ledger, invoice projection va audit dung transaction Serializable, idempotency bind property/operation/actor/payload.
+5. Tab Phong co Thu tien/Lich su thu; Chot tien chi hien so du read-only; Bao cao tach gross, cash received/reversed, credit applied va net outstanding.
+6. QA PostgreSQL da verify FIFO, stale preview, RBAC/property, concurrency, transfer, void va fault rollback; Security phe duyet P6-004 cho phase release.
+
+Non-goals: khong tab moi, khong lich tra gop, khong tenant portal/online banking, khong cho bo qua FIFO, khong refund/deposit workflow day du va khong hard delete receipt.
+
+Technical constraints: reuse stack va payment/account ledger hien co; mot source of truth cho balance; money khong floating point; property scope/RBAC/validation/idempotency/audit; receipt allocation credit invoice update phai atomic; moi schema change co migration. Public Internet van phu thuoc P7 CSRF/Origin va rate limiting.
+
+## Done - UX completion
+
+- [x] UX-COMPLETE-001 | UX completion | Safe tenancy transitions and operational UX | Agent: Lead + Product/BA + UI/UX + Backend + Frontend + Database + QA + Security | Dependency: P2-P6 complete, `reports/UX-AUDIT.md`; coordinate with P4-003, P7-001 | Scope: docs contract, `apps/api/**`, `apps/web/**`, `packages/database/**`, tests; DevOps/security scopes only when assigned | AC: UX-COMPLETE-AC below and `docs/acceptance-criteria.md` | Verify: 71 unit/component/schema tests, 3 foundation E2E, PostgreSQL rental/property suites, 16 desktop/mobile audit checks, `npm run check`, `npm run build`, `npm run test:e2e`, `npm run audit` passed 30/07/2026 | Risk: Critical
+
+### UX-COMPLETE-001 task detail
+
+- Goal: implement the prioritized audit as one integrated, low-complexity operating flow for room, tenant, settlement, invoice, dashboard and responsive navigation.
+- Short plan:
+  1. Product/BA freezes business rules, stories, testable AC and API expectations.
+  2. UI/UX defines desktop/mobile flows, action visibility, confirmation, feedback and responsive states without changing backend logic.
+  3. Database owns constraints/migration for representative history, idempotency and derived occupancy support.
+  4. Backend implements logout, derived room state, representative swap, safe member/group transfer, finalize-and-invoice and dashboard action queue.
+  5. Frontend implements navigation, contextual actions, feedback/formatting and the API flows after contracts stabilize.
+  6. QA verifies domain matrix and full desktop/mobile journeys; Security reviews auth, financial mutations, authorization and retry behavior; Lead integrates and runs quality gates.
+- Dependencies: P2 through P6 are implemented. Product contract and UI/UX flow must complete before implementation. Database/API contract precedes Backend; Backend contract precedes Frontend integration. P4-003 monthly job must reuse settlement/invoice idempotency and must not duplicate this flow. P7-001 remains deferred until UX-COMPLETE-001 passes review.
+- Exclusive ownership:
+  - Product/BA: `docs/business-rules.md`, `docs/user-stories.md`, `docs/acceptance-criteria.md`, Product sections of `TASKS.md`.
+  - UI/UX: `docs/ui-ux-spec.md` and audit/design artifacts only.
+  - Database: `packages/database/**` only.
+  - Backend: `apps/api/**` only.
+  - Frontend: `apps/web/**`, `packages/ui/**` only.
+  - QA: `tests/**` and test files coordinated with production owners; production fixes require Lead review.
+  - Security: review/report for session, authorization, financial mutation and sensitive-data exposure; code changes only when separately assigned.
+  - Lead: `docs/api-design.md`, `TASKS.md`, cross-contract review and integration.
+- UX-COMPLETE-AC:
+  - Co-tenant transfer/leave closes only that membership and creates no old-room settlement/invoice while another occupant remains.
+  - Whole-group transfer/end requires visible effective date, valid handover readings, preview/confirmation and exactly one old-room settlement plus invoice before room/tenancy transition completes.
+  - Representative swap selects an active co-tenant, preserves tenancy/memberships, creates no settlement/invoice, maintains exactly one representative and preserves payer on historical documents.
+  - Room `VACANT`/`OCCUPIED` is derived; users cannot manually create occupancy inconsistent with active tenancy/memberships.
+  - `Chot va tao hoa don` and retries produce exactly one finalized settlement, invoice and set of ledger effects; recoverable invoice-pending state has a clear retry action.
+  - Logout revokes the server session, clears the cookie, redirects to login and blocks back/refresh/API reuse; production credentials are never prefilled.
+  - Dashboard queues unsettled rooms, pending invoices, due/overdue items once each and links to preselected processing context.
+  - All mutations have loading/double-submit protection and Vietnamese success/domain-error feedback; money/utility units are formatted consistently and internal IDs are not primary labels.
+  - At 360/390/430 px all primary routes have no horizontal overflow, no overlap, labeled mobile records and touch targets at least 44 x 44 px; desktop behavior remains complete.
+- Test/review: QA owns the end-to-end matrix and PostgreSQL smoke data lifecycle; Security reviews logout/session, authorization and idempotent financial transitions; Product/BA validates domain outcomes; UI/UX reviews screenshots; Lead reviews schema/API compatibility and final diff.
+- Integration order: Product/BA -> UI/UX -> Database -> Backend -> Frontend -> QA/Security -> Lead. UI/UX may run in parallel with Database after the Product contract is frozen; Backend and Frontend may develop against the frozen API contract in separate scopes, but Frontend integration waits for Backend verification.
+- Non-goals: new main-menu tabs, batch settlement for many rooms, changing payment allocation model, document image storage, production deployment/P7 hardening, or unrelated visual redesign.
+- Technical constraints: preserve `/api/v1` compatibility where possible; all money remains integer/decimal without floating point; use configured timezone for business dates; financial and tenancy transitions require validation, authorization, audit and database transaction/idempotency guards; every schema change requires a migration and documentation; reuse the current React/NestJS/Prisma/PostgreSQL stack and existing design system.
+- Open decisions: confirm `DUE_SOON` threshold (proposed 3 days); confirm whether whole-group close/open stays one PostgreSQL transaction (preferred now) or uses a resumable workflow; retain P4-003 as backlog until its overlap with finalize-and-invoice is resolved.
 
 ## Blocked
 
@@ -90,18 +168,18 @@ Chua co.
 
 ## Agent Availability
 
-| Agent        | Trang thai | Task                    | File scope                                      |
-| ------------ | ---------- | ----------------------- | ----------------------------------------------- |
-| Lead         | Active     | Phase 4 planning/start  | `TASKS.md`, review/integration docs             |
-| Product      | Review     | PROJECT-001             | Product/business/story/AC docs                  |
-| UI/UX        | Review     | PROJECT-002             | `docs/ui-ux-spec.md`                            |
-| Architecture | Ready      | Phase 4 decisions       | `docs/decisions/**`, architecture/API docs      |
-| Database     | Ready      | P4-001                  | `packages/database/**`                          |
-| Backend      | Ready      | P4-001                  | `apps/api/**`                                   |
-| Frontend     | Ready      | P4-001                  | `apps/web/**`, `packages/ui/**`                 |
-| QA           | Ready      | P4-001 verification     | `tests/**`                                      |
-| Security     | Ready      | Review sensitive flows  | `docs/SECURITY.md`, review only unless assigned |
-| DevOps       | Blocked    | B-003 Docker validation | Docker/CI/deployment scopes                     |
+| Agent        | Trang thai | Task                       | File scope                                 |
+| ------------ | ---------- | -------------------------- | ------------------------------------------ |
+| Lead         | Ready      | P7 planning/integration    | `TASKS.md`, review/integration docs        |
+| Product      | Ready      | P7 requirements review     | Business rules, stories and AC docs        |
+| UI/UX        | Ready      | P7 accessibility review    | `docs/ui-ux-spec.md`, design artifacts     |
+| Architecture | Ready      | API/transaction review     | `docs/decisions/**`, architecture/API docs |
+| Database     | Ready      | P7 hardening backlog       | `packages/database/**`                     |
+| Backend      | Ready      | P4-003/P7 backlog          | `apps/api/**`                              |
+| Frontend     | Ready      | P7 accessibility backlog   | `apps/web/**`, `packages/ui/**`            |
+| QA           | Ready      | P4-003/P7 verification     | `tests/**`                                 |
+| Security     | Ready      | Auth/financial flow review | `docs/SECURITY.md`, review unless assigned |
+| DevOps       | Blocked    | B-003 Docker validation    | Docker/CI/deployment scopes                |
 
 ## Dependency Graph
 

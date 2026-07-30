@@ -7,6 +7,10 @@ import {
   type TenancyMember,
 } from "@prisma/client";
 import { PrismaService } from "../database/prisma.service.js";
+import {
+  assertAuthorizedPropertyId,
+  authorizedPropertyId,
+} from "../platform/property-scope.js";
 import { RoomCodeConflictException } from "./rooms.errors.js";
 import type {
   RoomCreateInput,
@@ -50,7 +54,7 @@ const activeOccupancyInclude = {
 } satisfies Prisma.RoomInclude;
 
 function mapRoom(room: RoomWithOccupancy): RoomRecord {
-  const tenancy = room.tenancies?.[0];
+  const tenancy = room.tenancies?.find((item) => item.members.length > 0);
   const occupants =
     tenancy?.members
       .map((member) => ({
@@ -86,7 +90,12 @@ function mapRoom(room: RoomWithOccupancy): RoomRecord {
     code: room.code,
     name: room.name,
     roomType: room.roomType,
-    status: room.status,
+    status:
+      room.status === "INACTIVE" || room.status === "MAINTENANCE"
+        ? room.status
+        : tenancy
+          ? "OCCUPIED"
+          : "VACANT",
     defaultRentAmount: room.defaultRentAmount.toString(),
     defaultBillingCycleType: room.defaultBillingCycleType,
     defaultBillingCycleCount: room.defaultBillingCycleCount,
@@ -125,9 +134,27 @@ export class PrismaRoomRepository implements RoomRepository {
   constructor(@Inject(PrismaService) private readonly prisma: PrismaService) {}
 
   async list(query: RoomListQuery) {
-    const where: Prisma.RoomWhereInput = {
+    const activeOccupancy = {
+      status: "ACTIVE" as const,
       deletedAt: null,
-      ...(query.status ? { status: query.status } : {}),
+      members: { some: { leftOn: null, deletedAt: null } },
+    };
+    const where: Prisma.RoomWhereInput = {
+      propertyId: authorizedPropertyId(),
+      deletedAt: null,
+      ...(query.status === "OCCUPIED"
+        ? {
+            status: { notIn: ["MAINTENANCE", "INACTIVE"] },
+            tenancies: { some: activeOccupancy },
+          }
+        : query.status === "VACANT"
+          ? {
+              status: { notIn: ["MAINTENANCE", "INACTIVE"] },
+              tenancies: { none: activeOccupancy },
+            }
+          : query.status
+            ? { status: query.status }
+            : {}),
       ...(query.groupId ? { roomGroupId: query.groupId } : {}),
       ...(query.q
         ? {
@@ -162,7 +189,7 @@ export class PrismaRoomRepository implements RoomRepository {
 
   async findById(id: string) {
     const room = await this.prisma.room.findFirst({
-      where: { id, deletedAt: null },
+      where: { id, propertyId: authorizedPropertyId(), deletedAt: null },
       include: activeOccupancyInclude,
     });
 
@@ -170,6 +197,7 @@ export class PrismaRoomRepository implements RoomRepository {
   }
 
   async create(input: RoomCreateInput) {
+    assertAuthorizedPropertyId(input.propertyId);
     await this.assertCodeAvailable(input.propertyId, input.code);
 
     try {
@@ -199,7 +227,7 @@ export class PrismaRoomRepository implements RoomRepository {
 
   async update(id: string, input: RoomUpdateInput) {
     const existing = await this.prisma.room.findFirst({
-      where: { id, deletedAt: null },
+      where: { id, propertyId: authorizedPropertyId(), deletedAt: null },
     });
     if (!existing) return null;
 
@@ -234,7 +262,7 @@ export class PrismaRoomRepository implements RoomRepository {
 
   async retire(id: string) {
     const existing = await this.prisma.room.findFirst({
-      where: { id, deletedAt: null },
+      where: { id, propertyId: authorizedPropertyId(), deletedAt: null },
     });
     if (!existing) return null;
 

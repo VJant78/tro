@@ -1,11 +1,8 @@
 import { z } from "zod";
+import { boundedMoneySchema } from "../platform/numeric.js";
 
 const uuidSchema = z.uuid();
 const dateSchema = z.iso.date();
-const moneySchema = z
-  .union([z.string(), z.number()])
-  .transform((value) => String(value).trim())
-  .refine((value) => /^\d+$/.test(value), "Must be a non-negative integer");
 
 export const tenantStatusSchema = z.enum(["ACTIVE", "LEFT", "INACTIVE"]);
 
@@ -61,8 +58,8 @@ export const tenancyCreateSchema = z.object({
     .max(31)
     .nullable()
     .optional(),
-  rentAmount: moneySchema.optional(),
-  depositAmount: moneySchema.optional(),
+  rentAmount: boundedMoneySchema.optional(),
+  depositAmount: boundedMoneySchema.optional(),
   notes: z.string().trim().max(1000).nullable().optional(),
 });
 
@@ -82,6 +79,11 @@ export const tenancyMemberTransferSchema = tenancyTransferSchema;
 export const tenancyMemberLeaveSchema = z.object({
   leftOn: dateSchema,
   notes: z.string().trim().max(1000).nullable().optional(),
+});
+
+export const representativeChangeSchema = z.object({
+  newRepresentativeTenantId: uuidSchema,
+  idempotencyKey: z.string().trim().min(16).max(128),
 });
 
 export const idParamSchema = z.object({ id: uuidSchema });

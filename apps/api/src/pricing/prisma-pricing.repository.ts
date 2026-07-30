@@ -1,6 +1,8 @@
 import { Inject, Injectable } from "@nestjs/common";
 import { Prisma, type PricingConfig } from "@prisma/client";
 import { PrismaService } from "../database/prisma.service.js";
+import { DomainException } from "../platform/domain.exception.js";
+import { authorizedPropertyId } from "../platform/property-scope.js";
 import { PricingOverlapException } from "./pricing.errors.js";
 import { resolvePricing } from "./pricing-utils.js";
 import type {
@@ -51,7 +53,7 @@ export class PrismaPricingRepository implements PricingRepository {
 
   async list() {
     const configs = await this.prisma.pricingConfig.findMany({
-      where: { deletedAt: null },
+      where: { deletedAt: null, ...this.authorizedScopeWhere() },
       orderBy: { createdAt: "desc" },
     });
     return configs.map(mapConfig);
@@ -59,7 +61,7 @@ export class PrismaPricingRepository implements PricingRepository {
 
   async findById(id: string) {
     const config = await this.prisma.pricingConfig.findFirst({
-      where: { id, deletedAt: null },
+      where: { id, deletedAt: null, ...this.authorizedScopeWhere() },
     });
     return config ? mapConfig(config) : null;
   }
@@ -120,6 +122,7 @@ export class PrismaPricingRepository implements PricingRepository {
   }
 
   async create(input: PricingConfigInput) {
+    await this.assertTargetScope(input);
     await this.assertNoOverlap(input);
     return mapConfig(
       await this.prisma.pricingConfig.create({
@@ -132,6 +135,7 @@ export class PrismaPricingRepository implements PricingRepository {
     const existing = await this.findById(id);
     if (!existing) return null;
     const next = { ...existing, ...input };
+    await this.assertTargetScope(next);
     await this.assertNoOverlap(next, id);
     return mapConfig(
       await this.prisma.pricingConfig.update({
@@ -158,6 +162,7 @@ export class PrismaPricingRepository implements PricingRepository {
     tenancyId?: string;
     asOf: string;
   }) {
+    await this.assertResolutionScope(input);
     const asOfDate = asDate(input.asOf);
     const configs = await this.prisma.pricingConfig.findMany({
       where: {
@@ -222,6 +227,87 @@ export class PrismaPricingRepository implements PricingRepository {
       isActive: input.isActive,
       notes: input.notes,
     };
+  }
+
+  private authorizedScopeWhere(): Prisma.PricingConfigWhereInput {
+    const propertyId = authorizedPropertyId();
+    return {
+      OR: [
+        { scope: "SYSTEM" },
+        { scope: "PROPERTY", propertyId },
+        { scope: "ROOM", room: { propertyId } },
+        { scope: "TENANCY", tenancy: { room: { propertyId } } },
+      ],
+    };
+  }
+
+  private async assertTargetScope(
+    input: Pick<
+      PricingConfigInput,
+      "scope" | "propertyId" | "roomId" | "tenancyId"
+    >,
+  ) {
+    if (input.scope === "SYSTEM") return;
+    const propertyId = authorizedPropertyId();
+    if (input.scope === "PROPERTY") {
+      if (input.propertyId === propertyId) return;
+      throw this.scopeException();
+    }
+    if (input.scope === "ROOM") {
+      const room = await this.prisma.room.findFirst({
+        where: { id: input.roomId ?? "", propertyId, deletedAt: null },
+        select: { id: true },
+      });
+      if (room) return;
+      throw this.scopeException();
+    }
+
+    const tenancy = await this.prisma.tenancy.findFirst({
+      where: {
+        id: input.tenancyId ?? "",
+        deletedAt: null,
+        room: { propertyId },
+      },
+      select: { id: true },
+    });
+    if (!tenancy) throw this.scopeException();
+  }
+
+  private async assertResolutionScope(input: {
+    propertyId?: string;
+    roomId?: string;
+    tenancyId?: string;
+  }) {
+    const propertyId = authorizedPropertyId();
+    if (input.propertyId && input.propertyId !== propertyId) {
+      throw this.scopeException();
+    }
+    if (input.roomId) {
+      const room = await this.prisma.room.findFirst({
+        where: { id: input.roomId, propertyId, deletedAt: null },
+        select: { id: true },
+      });
+      if (!room) throw this.scopeException();
+    }
+    if (input.tenancyId) {
+      const tenancy = await this.prisma.tenancy.findFirst({
+        where: {
+          id: input.tenancyId,
+          deletedAt: null,
+          room: { propertyId },
+        },
+        select: { id: true },
+      });
+      if (!tenancy) throw this.scopeException();
+    }
+  }
+
+  private scopeException() {
+    return new DomainException(
+      "PROPERTY_SCOPE_FORBIDDEN",
+      "Resource does not belong to the authorized property",
+      403,
+    );
   }
 
   private async assertNoOverlap(

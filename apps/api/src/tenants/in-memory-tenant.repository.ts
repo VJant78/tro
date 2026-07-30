@@ -1,6 +1,12 @@
 import { randomUUID } from "node:crypto";
+import { Inject, Injectable } from "@nestjs/common";
+import { AuditService } from "../audit/audit.service.js";
+import { authorizedPropertyId } from "../platform/property-scope.js";
 import {
   ActiveTenancyConflictException,
+  IdempotencyKeyReusedException,
+  OldRoomSettlementRequiredException,
+  RepresentativeNotActiveCotenantException,
   TenantNotFoundException,
 } from "./tenants.errors.js";
 import type {
@@ -10,6 +16,8 @@ import type {
   TenancyMemberTransferInput,
   TenancyRecord,
   TenancyTransferInput,
+  RepresentativeChangeInput,
+  RepresentativeChangeRecord,
   TenantCreateInput,
   TenantListQuery,
   TenantRecord,
@@ -29,10 +37,17 @@ type StoredTenancyMember = {
   deletedAt: string | null;
 };
 
+@Injectable()
 export class InMemoryTenantRepository implements TenantRepository {
   private readonly tenants: StoredTenant[] = [];
   private readonly tenancies: StoredTenancy[] = [];
   private readonly memberships: StoredTenancyMember[] = [];
+  private readonly representativeChanges = new Map<
+    string,
+    RepresentativeChangeRecord & { requestHash: string }
+  >();
+
+  constructor(@Inject(AuditService) private readonly audit: AuditService) {}
 
   async list(query: TenantListQuery) {
     const q = query.q?.toUpperCase();
@@ -88,6 +103,7 @@ export class InMemoryTenantRepository implements TenantRepository {
     const now = new Date().toISOString();
     const tenant: StoredTenant = {
       id: randomUUID(),
+      propertyId: input.propertyId ?? authorizedPropertyId(),
       fullName: input.fullName,
       phone: input.phone ?? null,
       identityNumber: input.identityNumber ?? null,
@@ -299,11 +315,8 @@ export class InMemoryTenantRepository implements TenantRepository {
       (membership) => membership.tenantId === tenantId,
     );
     if (!movingMember) return null;
-    if (movingMember.isRepresentative && activeMembers.length > 1) {
-      throw new ActiveTenancyConflictException(
-        "Representative cannot move alone while co-tenants remain",
-      );
-    }
+    if (movingMember.isRepresentative)
+      throw new OldRoomSettlementRequiredException();
 
     const targetTenancy = this.tenancies.find(
       (item) =>
@@ -362,11 +375,8 @@ export class InMemoryTenantRepository implements TenantRepository {
       (membership) => membership.tenantId === tenantId,
     );
     if (!leavingMember) return null;
-    if (leavingMember.isRepresentative && activeMembers.length > 1) {
-      throw new ActiveTenancyConflictException(
-        "Representative cannot leave while co-tenants remain",
-      );
-    }
+    if (leavingMember.isRepresentative)
+      throw new OldRoomSettlementRequiredException();
 
     leavingMember.leftOn = input.leftOn;
     if (activeMembers.length === 1) {
@@ -408,6 +418,81 @@ export class InMemoryTenantRepository implements TenantRepository {
           members: this.membersForTenancy(tenancy),
         }),
       );
+  }
+
+  async changeRepresentative(
+    tenancyId: string,
+    input: RepresentativeChangeInput,
+  ): Promise<RepresentativeChangeRecord | null> {
+    const key = `${tenancyId}:${input.idempotencyKey}`;
+    const replay = this.representativeChanges.get(key);
+    if (replay) {
+      if (replay.requestHash !== input.requestHash) {
+        throw new IdempotencyKeyReusedException();
+      }
+      return {
+        tenancyId: replay.tenancyId,
+        previousRepresentative: replay.previousRepresentative,
+        newRepresentative: replay.newRepresentative,
+        effectiveAt: replay.effectiveAt,
+        replayed: true,
+      };
+    }
+    const tenancy = this.tenancies.find(
+      (item) =>
+        item.id === tenancyId && item.status === "ACTIVE" && !item.deletedAt,
+    );
+    if (!tenancy) return null;
+    const members = this.activeMembers(tenancyId);
+    const previous = members.find(
+      (member) => member.tenantId === tenancy.representativeTenantId,
+    );
+    const next = members.find(
+      (member) =>
+        member.tenantId === input.newRepresentativeTenantId &&
+        !member.isRepresentative,
+    );
+    if (!previous || !next) {
+      throw new RepresentativeNotActiveCotenantException();
+    }
+    previous.isRepresentative = false;
+    previous.role = "CO_TENANT";
+    next.isRepresentative = true;
+    next.role = "REPRESENTATIVE";
+    const oldTenantId = tenancy.representativeTenantId;
+    tenancy.representativeTenantId = next.tenantId;
+    tenancy.representativeTenantName =
+      this.tenants.find((tenant) => tenant.id === next.tenantId)?.fullName ??
+      null;
+    tenancy.members = this.membersForTenancy(tenancy);
+    tenancy.updatedAt = new Date().toISOString();
+    const record: RepresentativeChangeRecord & { requestHash: string } = {
+      tenancyId,
+      previousRepresentative: {
+        tenantId: oldTenantId,
+        fullName:
+          this.tenants.find((tenant) => tenant.id === oldTenantId)?.fullName ??
+          null,
+      },
+      newRepresentative: {
+        tenantId: next.tenantId,
+        fullName: tenancy.representativeTenantName,
+      },
+      effectiveAt: new Date().toISOString(),
+      replayed: false,
+      requestHash: input.requestHash,
+    };
+    this.representativeChanges.set(key, record);
+    await this.audit.record({
+      action: "STATUS_CHANGE",
+      entityType: "tenancy_representative",
+      entityId: tenancyId,
+      actorUserId: input.actorUserId,
+      oldValues: { representativeTenantId: oldTenantId },
+      newValues: { representativeTenantId: next.tenantId },
+      metadata: { status: "REPRESENTATIVE_CHANGED" },
+    });
+    return record;
   }
 
   private assertTenantExists(tenantId: string) {

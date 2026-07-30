@@ -12,6 +12,7 @@ import {
 } from "@nestjs/common";
 import type { Request } from "express";
 import { parseRequest } from "../platform/validation.js";
+import { DomainException } from "../platform/domain.exception.js";
 import { Roles, type AppRole } from "../security/roles.decorator.js";
 import { BillingService } from "./billing.service.js";
 import {
@@ -39,6 +40,7 @@ export class BillingController {
     @Inject(BillingService) private readonly billing: BillingService,
   ) {}
 
+  @Header("Cache-Control", "private, no-store")
   @Get("invoices")
   listInvoices(@Query() query: unknown) {
     return this.billing.listInvoices(
@@ -46,23 +48,25 @@ export class BillingController {
     );
   }
 
+  @Header("Cache-Control", "private, no-store")
   @Get("invoices/:id")
   findInvoice(@Param() params: unknown) {
     const { id } = parseRequest(idParamSchema, params);
-    return this.billing.findInvoiceById(id);
+    return this.billing.findInvoiceDetailById(id);
   }
 
   @Roles("OWNER", "MANAGER", "STAFF")
   @Post("invoices/from-settlement")
-  createInvoiceFromSettlement(
+  async createInvoiceFromSettlement(
     @Body() body: unknown,
     @Req() request: RequestWithUser,
   ) {
     const { settlementId } = parseRequest(fromSettlementSchema, body);
-    return this.billing.createInvoiceFromSettlement(
+    const invoice = await this.billing.createInvoiceFromSettlement(
       settlementId,
       request.user?.id,
     );
+    return this.billing.invoiceReadResponse(invoice);
   }
 
   @Get("payments")
@@ -80,11 +84,22 @@ export class BillingController {
     @Req() request: RequestWithUser,
   ) {
     const parsed = parseRequest(paymentCreateSchema, body);
+    if (
+      parsed.idempotencyKey &&
+      idempotencyHeader &&
+      parsed.idempotencyKey !== idempotencyHeader
+    ) {
+      throw new DomainException(
+        "IDEMPOTENCY_KEY_MISMATCH",
+        "Idempotency-Key header must match the request body",
+        422,
+      );
+    }
     return this.billing.createPayment(
       {
         ...parsed,
         idempotencyKey: parsed.idempotencyKey ?? idempotencyHeader ?? null,
-        paidAt: parsed.paidAt ?? new Date().toISOString(),
+        paidAt: parsed.paidAt,
       },
       request.user?.id,
     );
@@ -102,6 +117,14 @@ export class BillingController {
     );
   }
 
+  @Get("dashboard/actions")
+  dashboardActions(@Query() query: unknown) {
+    return this.billing.dashboardActions(
+      parseRequest(dashboardSummaryQuerySchema, query),
+    );
+  }
+
+  @Header("Cache-Control", "private, no-store")
   @Get("reports/monthly")
   monthlyReport(@Query() query: unknown) {
     return this.billing.monthlyReport(
@@ -110,6 +133,7 @@ export class BillingController {
   }
 
   @Header("Content-Type", "text/csv; charset=utf-8")
+  @Header("Cache-Control", "private, no-store")
   @Get("reports/monthly.csv")
   async monthlyReportCsv(@Query() query: unknown) {
     return this.billing.monthlyReportCsv(

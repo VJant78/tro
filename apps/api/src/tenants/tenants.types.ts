@@ -16,6 +16,7 @@ export interface TenantCurrentTenancyRecord {
 
 export interface TenantRecord {
   id: string;
+  propertyId: string;
   fullName: string;
   phone: string | null;
   identityNumber: string | null;
@@ -70,6 +71,7 @@ export interface TenantListQuery {
 }
 
 export interface TenantCreateInput {
+  propertyId?: string;
   fullName: string;
   phone?: string | null;
   identityNumber?: string | null;
@@ -116,6 +118,21 @@ export interface TenancyMemberLeaveInput {
   notes?: string | null;
 }
 
+export interface RepresentativeChangeInput {
+  newRepresentativeTenantId: string;
+  idempotencyKey: string;
+  requestHash: string;
+  actorUserId?: string;
+}
+
+export interface RepresentativeChangeRecord {
+  tenancyId: string;
+  previousRepresentative: { tenantId: string; fullName: string | null };
+  newRepresentative: { tenantId: string; fullName: string | null };
+  effectiveAt: string;
+  replayed: boolean;
+}
+
 export interface TenantRepository {
   list(query: TenantListQuery): Promise<{
     data: TenantRecord[];
@@ -138,11 +155,17 @@ export interface TenantRepository {
     tenancyId: string,
     tenantId: string,
     input: TenancyMemberTransferInput,
+    actorUserId?: string,
   ): Promise<TenancyRecord | null>;
   leaveMember(
     tenancyId: string,
     tenantId: string,
     input: TenancyMemberLeaveInput,
+    actorUserId?: string,
   ): Promise<TenancyRecord | null>;
+  changeRepresentative(
+    tenancyId: string,
+    input: RepresentativeChangeInput,
+  ): Promise<RepresentativeChangeRecord | null>;
   listTenancies(tenantId?: string): Promise<TenancyRecord[]>;
 }

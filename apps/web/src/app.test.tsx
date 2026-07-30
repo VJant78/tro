@@ -3,34 +3,37 @@ import { describe, expect, it, vi } from "vitest";
 import { App } from "./app";
 
 describe("App", () => {
-  it("renders the dashboard shell", () => {
-    vi.spyOn(globalThis, "fetch").mockResolvedValue(
-      new Response(
-        JSON.stringify({
-          asOf: "2026-07-30",
-          billingYear: 2026,
-          billingMonth: 7,
-          totals: {
-            rooms: 0,
-            occupiedRooms: 0,
-            currentMonthCollectable: "0",
-            currentMonthCollected: "0",
-            currentMonthOutstanding: "0",
-            overdueInvoiceCount: 0,
-            overdueAmount: "0",
-          },
-          needsAttention: [],
-        }),
-        { status: 200, headers: { "Content-Type": "application/json" } },
-      ),
-    );
+  it("renders the dashboard shell", async () => {
+    vi.spyOn(globalThis, "fetch").mockImplementation(async (input) => {
+      const payload = String(input).includes("/dashboard/actions")
+        ? { asOf: "2026-07-30", dueSoonDays: 3, items: [] }
+        : {
+            asOf: "2026-07-30",
+            billingYear: 2026,
+            billingMonth: 7,
+            totals: {
+              rooms: 0,
+              occupiedRooms: 0,
+              currentMonthCollectable: "0",
+              currentMonthCollected: "0",
+              currentMonthOutstanding: "0",
+              overdueInvoiceCount: 0,
+              overdueAmount: "0",
+            },
+            needsAttention: [],
+          };
+      return new Response(JSON.stringify(payload), {
+        status: 200,
+        headers: { "Content-Type": "application/json" },
+      });
+    });
     window.history.pushState({}, "", "/");
     render(<App />);
 
     expect(
-      screen.getByRole("heading", { name: "Dashboard" }),
+      await screen.findByRole("heading", { name: "Tổng quan" }),
     ).toBeInTheDocument();
-    expect(screen.getByText("Tro Manager")).toBeInTheDocument();
+    expect(screen.getByText("Quản lý trọ")).toBeInTheDocument();
     vi.restoreAllMocks();
   });
 
@@ -49,7 +52,7 @@ describe("App", () => {
     render(<App />);
 
     expect(
-      await screen.findByRole("heading", { name: "Phong" }),
+      await screen.findByRole("heading", { name: "Phòng" }),
     ).toBeInTheDocument();
     vi.restoreAllMocks();
   });
@@ -69,7 +72,7 @@ describe("App", () => {
     render(<App />);
 
     expect(
-      await screen.findByRole("heading", { name: "Nguoi thue" }),
+      await screen.findByRole("heading", { name: "Người thuê" }),
     ).toBeInTheDocument();
     vi.restoreAllMocks();
   });
@@ -109,7 +112,7 @@ describe("App", () => {
     render(<App />);
 
     expect(
-      await screen.findByRole("heading", { name: "Cau hinh" }),
+      await screen.findByRole("heading", { name: "Cài đặt" }),
     ).toBeInTheDocument();
     vi.restoreAllMocks();
   });
@@ -136,20 +139,34 @@ describe("App", () => {
     render(<App />);
 
     expect(
-      await screen.findByRole("heading", { name: "Dien nuoc" }),
-    ).toBeInTheDocument();
+      await screen.findAllByRole("heading", { name: "Chốt tiền" }),
+    ).toHaveLength(2);
     vi.restoreAllMocks();
   });
 
   it("routes to reports", async () => {
-    vi.spyOn(globalThis, "fetch").mockResolvedValue(
-      new Response(
+    vi.spyOn(globalThis, "fetch").mockImplementation(async (input) => {
+      if (String(input).includes("/rooms?")) {
+        return new Response(
+          JSON.stringify({
+            data: [],
+            page: { limit: 100, nextCursor: null, hasMore: false },
+          }),
+          { status: 200, headers: { "Content-Type": "application/json" } },
+        );
+      }
+      return new Response(
         JSON.stringify({
           billingYear: 2026,
           billingMonth: 7,
           periodStart: "2026-07-01",
           periodEnd: "2026-07-31",
           totals: {
+            grossBilled: "0",
+            cashReceived: "0",
+            cashReversed: "0",
+            creditApplied: "0",
+            netOutstanding: "0",
             invoiceTotal: "0",
             collected: "0",
             outstanding: "0",
@@ -162,14 +179,14 @@ describe("App", () => {
           debts: [],
         }),
         { status: 200, headers: { "Content-Type": "application/json" } },
-      ),
-    );
+      );
+    });
 
     window.history.pushState({}, "", "/reports");
     render(<App />);
 
     expect(
-      await screen.findByRole("heading", { name: "Bao cao" }),
+      await screen.findByRole("heading", { name: "Báo cáo" }),
     ).toBeInTheDocument();
     vi.restoreAllMocks();
   });

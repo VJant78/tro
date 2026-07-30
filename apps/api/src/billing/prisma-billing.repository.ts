@@ -1,15 +1,25 @@
 import { Inject, Injectable } from "@nestjs/common";
+import { Prisma } from "@prisma/client";
 import type {
   Invoice,
   InvoiceItem,
   Payment,
   PaymentAllocation,
-  Prisma,
   Room,
   Tenant,
 } from "@prisma/client";
+import { AuditService } from "../audit/audit.service.js";
 import { PrismaService } from "../database/prisma.service.js";
-import { InvoiceNotFoundException } from "./billing.errors.js";
+import {
+  assertAuthorizedPropertyId,
+  authorizedPropertyId,
+} from "../platform/property-scope.js";
+import { moneyString, moneyValue } from "../platform/numeric.js";
+import {
+  BillingValidationException,
+  InvoiceNotFoundException,
+  PaymentIdempotencyKeyReusedException,
+} from "./billing.errors.js";
 import { buildDebtSummaries } from "./debt-summary.js";
 import type {
   BillingRepository,
@@ -126,7 +136,10 @@ function mapPayment(payment: PaymentWithRelations): PaymentRecord {
     amount: payment.amount.toString(),
     method: payment.method,
     status: payment.status,
+    sourceType: payment.sourceType,
     paidAt: payment.paidAt.toISOString(),
+    voidedAt: payment.voidedAt?.toISOString() ?? null,
+    voidReason: payment.voidReason,
     idempotencyKey: payment.idempotencyKey,
     description: payment.description,
     notes: payment.notes,
@@ -150,11 +163,15 @@ function mapPayment(payment: PaymentWithRelations): PaymentRecord {
 
 @Injectable()
 export class PrismaBillingRepository implements BillingRepository {
-  constructor(@Inject(PrismaService) private readonly prisma: PrismaService) {}
+  constructor(
+    @Inject(PrismaService) private readonly prisma: PrismaService,
+    @Inject(AuditService) private readonly audit: AuditService,
+  ) {}
 
   async listInvoices(query: InvoiceListQuery) {
     const invoices = await this.prisma.invoice.findMany({
       where: {
+        propertyId: authorizedPropertyId(),
         deletedAt: null,
         roomId: query.roomId,
         tenancyId: query.tenancyId,
@@ -165,13 +182,14 @@ export class PrismaBillingRepository implements BillingRepository {
       },
       include: invoiceInclude(),
       orderBy: { createdAt: "desc" },
+      take: query.limit,
     });
     return invoices.map(mapInvoice);
   }
 
   async findInvoiceById(id: string) {
     const invoice = await this.prisma.invoice.findFirst({
-      where: { id, deletedAt: null },
+      where: { id, propertyId: authorizedPropertyId(), deletedAt: null },
       include: invoiceInclude(),
     });
     return invoice ? mapInvoice(invoice) : null;
@@ -179,15 +197,20 @@ export class PrismaBillingRepository implements BillingRepository {
 
   async findInvoiceBySourceKey(sourceKey: string) {
     const invoice = await this.prisma.invoice.findFirst({
-      where: { sourceKey, deletedAt: null },
+      where: {
+        sourceKey,
+        propertyId: authorizedPropertyId(),
+        deletedAt: null,
+      },
       include: invoiceInclude(),
     });
     return invoice ? mapInvoice(invoice) : null;
   }
 
-  async createInvoice(input: InvoiceCreateInput) {
-    return mapInvoice(
-      await this.prisma.invoice.create({
+  async createInvoice(input: InvoiceCreateInput, actorUserId?: string) {
+    assertAuthorizedPropertyId(input.propertyId);
+    const invoice = await this.prisma.$transaction(async (tx) => {
+      const created = await tx.invoice.create({
         data: {
           invoiceNumber: input.invoiceNumber,
           propertyId: input.propertyId,
@@ -224,30 +247,46 @@ export class PrismaBillingRepository implements BillingRepository {
           },
         },
         include: invoiceInclude(),
-      }),
-    );
+      });
+      await this.audit.record(
+        {
+          action: "ISSUE_INVOICE",
+          entityType: "invoice",
+          entityId: created.id,
+          actorUserId,
+          newValues: mapInvoice(created),
+          metadata: { sourceKey: input.sourceKey },
+        },
+        tx,
+      );
+      return created;
+    });
+    return mapInvoice(invoice);
   }
 
   async listPayments(query: PaymentListQuery) {
     const payments = await this.prisma.payment.findMany({
       where: {
+        propertyId: authorizedPropertyId(),
         deletedAt: null,
         roomId: query.roomId,
         payerTenantId: query.payerTenantId,
         allocations: query.invoiceId
           ? { some: { invoiceId: query.invoiceId, deletedAt: null } }
           : undefined,
-        paidAt:
-          query.paidFrom || query.paidTo
-            ? {
-                gte: query.paidFrom
-                  ? new Date(`${query.paidFrom}T00:00:00.000Z`)
+        ...(query.eventFrom || query.eventTo
+          ? {
+              OR: [
+                { paidAt: dateRange(query.eventFrom, query.eventTo) },
+                { voidedAt: dateRange(query.eventFrom, query.eventTo) },
+              ],
+            }
+          : {
+              paidAt:
+                query.paidFrom || query.paidTo
+                  ? dateRange(query.paidFrom, query.paidTo)
                   : undefined,
-                lte: query.paidTo
-                  ? new Date(`${query.paidTo}T23:59:59.999Z`)
-                  : undefined,
-              }
-            : undefined,
+            }),
       },
       include: paymentInclude(),
       orderBy: { paidAt: "desc" },
@@ -255,64 +294,209 @@ export class PrismaBillingRepository implements BillingRepository {
     return payments.map(mapPayment);
   }
 
-  async findPaymentByIdempotencyKey(idempotencyKey: string) {
-    const payment = await this.prisma.payment.findFirst({
-      where: { idempotencyKey, deletedAt: null },
-      include: paymentInclude(),
-    });
-    return payment ? mapPayment(payment) : null;
+  async createPayment(input: PaymentCreateInput): Promise<PaymentCreateResult> {
+    for (let attempt = 0; attempt < 3; attempt += 1) {
+      try {
+        return await this.createPaymentAttempt(input);
+      } catch (error) {
+        if (isSerializationFailure(error) && attempt < 2) {
+          await new Promise((resolve) =>
+            setTimeout(resolve, 10 * (attempt + 1)),
+          );
+          continue;
+        }
+        if (
+          error instanceof Prisma.PrismaClientKnownRequestError &&
+          error.code === "P2002" &&
+          input.idempotencyKey
+        ) {
+          return this.createPaymentAttempt(input);
+        }
+        throw error;
+      }
+    }
+    throw new BillingValidationException(
+      "Payment transaction could not complete",
+    );
   }
 
-  async createPayment(input: PaymentCreateInput): Promise<PaymentCreateResult> {
-    const saved = await this.prisma.$transaction(async (tx) => {
-      const invoice = await tx.invoice.findFirst({
-        where: { id: input.invoiceId, deletedAt: null },
-        include: { paymentAllocations: true },
-      });
-      if (!invoice) throw new InvoiceNotFoundException();
+  private async createPaymentAttempt(
+    input: PaymentCreateInput,
+  ): Promise<PaymentCreateResult> {
+    const propertyId = authorizedPropertyId();
+    const saved = await this.prisma.$transaction(
+      async (tx) => {
+        if (input.idempotencyKey) {
+          const existing = await tx.payment.findFirst({
+            where: {
+              idempotencyKey: input.idempotencyKey,
+              propertyId,
+              deletedAt: null,
+            },
+            include: paymentInclude(),
+          });
+          if (existing) {
+            const allocation = existing.allocations[0];
+            const sameLegacyRequest =
+              allocation?.invoiceId === input.invoiceId &&
+              existing.amount.toString() === input.amount &&
+              existing.method === input.method &&
+              existing.paidAt.toISOString() === input.paidAt;
+            if (
+              (existing.requestHash &&
+                existing.requestHash !== input.requestHash) ||
+              (!existing.requestHash && !sameLegacyRequest)
+            ) {
+              throw new PaymentIdempotencyKeyReusedException();
+            }
+            if (!existing.requestHash) {
+              const bound = await tx.payment.updateMany({
+                where: { id: existing.id, requestHash: null },
+                data: { requestHash: input.requestHash },
+              });
+              if (bound.count !== 1) {
+                throw new PaymentIdempotencyKeyReusedException();
+              }
+              await this.audit.record(
+                {
+                  action: "UPDATE",
+                  entityType: "payment",
+                  entityId: existing.id,
+                  actorUserId: input.actorUserId,
+                  metadata: { mode: "bind-legacy-request-hash" },
+                },
+                tx,
+              );
+            }
+            const invoice = allocation
+              ? await tx.invoice.findFirst({
+                  where: {
+                    id: allocation.invoiceId,
+                    propertyId,
+                    deletedAt: null,
+                  },
+                  include: invoiceInclude(),
+                })
+              : null;
+            if (!invoice) throw new InvoiceNotFoundException();
+            return { payment: existing, invoice };
+          }
+        }
 
-      const amount = Number(input.amount);
-      const nextPaid = Number(invoice.paidAmount.toString()) + amount;
-      const nextOutstanding =
-        Number(invoice.outstandingAmount.toString()) - amount;
-      const payment = await tx.payment.create({
-        data: {
-          paymentNumber: input.paymentNumber,
-          propertyId: invoice.propertyId,
-          roomId: invoice.roomId,
-          payerTenantId: invoice.payerTenantId,
-          amount: input.amount,
-          method: input.method,
-          status: "CONFIRMED",
-          paidAt: new Date(input.paidAt),
-          idempotencyKey: input.idempotencyKey,
-          description: input.description,
-          notes: input.notes,
-        },
-      });
-      await tx.paymentAllocation.create({
-        data: {
-          paymentId: payment.id,
-          invoiceId: invoice.id,
-          amount: input.amount,
-        },
-      });
-      const updatedInvoice = await tx.invoice.update({
-        where: { id: invoice.id },
-        data: {
-          paidAmount: String(nextPaid),
-          outstandingAmount: String(Math.max(0, nextOutstanding)),
-          status: nextOutstanding <= 0 ? "PAID" : "PARTIALLY_PAID",
-          fullyPaidAt: nextOutstanding <= 0 ? new Date() : invoice.fullyPaidAt,
-        },
-        include: invoiceInclude(),
-      });
-      const savedPayment = await tx.payment.findUniqueOrThrow({
-        where: { id: payment.id },
-        include: paymentInclude(),
-      });
-      return { payment: savedPayment, invoice: updatedInvoice };
-    });
+        let invoice = await tx.invoice.findFirst({
+          where: { id: input.invoiceId, propertyId, deletedAt: null },
+          include: { paymentAllocations: true },
+        });
+        if (!invoice) throw new InvoiceNotFoundException();
+        if (!invoice.tenancyId) {
+          throw new BillingValidationException(
+            "Invoice must belong to a tenancy before it can be paid",
+          );
+        }
+        await tx.$queryRaw(
+          Prisma.sql`SELECT id FROM tenancies WHERE id = ${invoice.tenancyId}::uuid FOR UPDATE`,
+        );
+        const oldestInvoice = await tx.invoice.findFirst({
+          where: {
+            propertyId,
+            tenancyId: invoice.tenancyId,
+            deletedAt: null,
+            status: { not: "CANCELLED" },
+            outstandingAmount: { gt: 0 },
+          },
+          orderBy: [
+            { billingPeriodStart: "asc" },
+            { billingPeriodEnd: "asc" },
+            { dueOn: "asc" },
+            { createdAt: "asc" },
+            { id: "asc" },
+          ],
+          select: { id: true },
+        });
+        if (oldestInvoice?.id !== invoice.id) {
+          throw new BillingValidationException(
+            "Payment must target the oldest outstanding invoice",
+          );
+        }
+        await tx.$queryRaw(
+          Prisma.sql`SELECT id FROM invoices WHERE id = ${invoice.id}::uuid FOR UPDATE`,
+        );
+        invoice = await tx.invoice.findFirst({
+          where: { id: input.invoiceId, propertyId, deletedAt: null },
+          include: { paymentAllocations: true },
+        });
+        if (!invoice?.tenancyId) throw new InvoiceNotFoundException();
+        if (invoice.status === "CANCELLED") {
+          throw new BillingValidationException(
+            "Cannot pay a cancelled invoice",
+          );
+        }
+        const amount = moneyValue(input.amount);
+        const outstanding = moneyValue(invoice.outstandingAmount.toString());
+        if (invoice.status === "PAID" || outstanding === 0n) {
+          throw new BillingValidationException("Invoice is already paid");
+        }
+        if (amount > outstanding) {
+          throw new BillingValidationException(
+            "Payment amount cannot exceed invoice outstanding amount",
+          );
+        }
+        const nextPaid = moneyValue(invoice.paidAmount.toString()) + amount;
+        const nextOutstanding = outstanding - amount;
+        const payment = await tx.payment.create({
+          data: {
+            paymentNumber: input.paymentNumber,
+            propertyId: invoice.propertyId,
+            roomId: invoice.roomId,
+            tenancyId: invoice.tenancyId,
+            payerTenantId: invoice.payerTenantId,
+            amount: input.amount,
+            method: input.method,
+            status: "CONFIRMED",
+            paidAt: new Date(input.paidAt),
+            idempotencyKey: input.idempotencyKey,
+            requestHash: input.requestHash,
+            description: input.description,
+            notes: input.notes,
+          },
+        });
+        await tx.paymentAllocation.create({
+          data: {
+            paymentId: payment.id,
+            invoiceId: invoice.id,
+            amount: input.amount,
+          },
+        });
+        const updatedInvoice = await tx.invoice.update({
+          where: { id: invoice.id },
+          data: {
+            paidAmount: moneyString(nextPaid),
+            outstandingAmount: moneyString(nextOutstanding),
+            status: nextOutstanding === 0n ? "PAID" : "PARTIALLY_PAID",
+            fullyPaidAt:
+              nextOutstanding === 0n ? new Date() : invoice.fullyPaidAt,
+          },
+          include: invoiceInclude(),
+        });
+        const savedPayment = await tx.payment.findUniqueOrThrow({
+          where: { id: payment.id },
+          include: paymentInclude(),
+        });
+        await this.audit.record(
+          {
+            action: "CONFIRM_PAYMENT",
+            entityType: "payment",
+            entityId: payment.id,
+            actorUserId: input.actorUserId,
+            newValues: mapPayment(savedPayment),
+            metadata: { invoiceId: invoice.id },
+          },
+          tx,
+        );
+        return { payment: savedPayment, invoice: updatedInvoice };
+      },
+      { isolationLevel: Prisma.TransactionIsolationLevel.Serializable },
+    );
     return {
       payment: mapPayment(saved.payment),
       invoice: mapInvoice(saved.invoice),
@@ -320,9 +504,23 @@ export class PrismaBillingRepository implements BillingRepository {
   }
 
   async listDebts(query: DebtListQuery) {
-    const invoices = await this.listInvoices({});
+    const invoices = await this.listInvoices({ roomId: query.roomId });
     return buildDebtSummaries(invoices, query);
   }
+}
+
+function isSerializationFailure(error: unknown) {
+  return (
+    error instanceof Prisma.PrismaClientKnownRequestError &&
+    error.code === "P2034"
+  );
+}
+
+function dateRange(from?: string, to?: string) {
+  return {
+    gte: from ? new Date(`${from}T00:00:00.000Z`) : undefined,
+    lte: to ? new Date(`${to}T23:59:59.999Z`) : undefined,
+  };
 }
 
 function invoiceInclude() {

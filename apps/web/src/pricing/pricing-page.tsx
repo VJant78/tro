@@ -1,6 +1,7 @@
 import { FormEvent, useEffect, useState } from "react";
 import { Button } from "@repo/ui";
-import { ApiError, apiFetch } from "../api";
+import { ApiError, apiFetch, messageFor } from "../api";
+import { formatMoney, normalizeMoneyInput } from "../format";
 import type { PricingConfig } from "./types";
 
 const emptyForm = {
@@ -25,21 +26,22 @@ const moneyFields = [
 ] as const;
 
 const labels: Record<string, string> = {
-  electricityUnitPrice: "Gia dien",
-  waterUnitPrice: "Gia nuoc",
-  trashFee: "Phi rac",
+  electricityUnitPrice: "Giá điện",
+  waterUnitPrice: "Giá nước",
+  trashFee: "Phí rác",
   internetFee: "Internet",
-  serviceFee: "Dich vu",
-  utilityClosingDay: "Ngay chot",
-  dueDay: "Ngay den han",
-  currencyCode: "Tien te",
-  timezone: "Mui gio",
+  serviceFee: "Dịch vụ",
+  utilityClosingDay: "Ngày chốt",
+  dueDay: "Ngày đến hạn",
+  currencyCode: "Tiền tệ",
+  timezone: "Múi giờ",
 };
 
 export function PricingPage() {
   const [config, setConfig] = useState<PricingConfig | null>(null);
   const [form, setForm] = useState(emptyForm);
   const [error, setError] = useState<string | null>(null);
+  const [success, setSuccess] = useState<string | null>(null);
   const [fieldErrors, setFieldErrors] = useState<Record<string, string>>({});
   const [isLoading, setIsLoading] = useState(true);
   const [isSaving, setIsSaving] = useState(false);
@@ -47,6 +49,7 @@ export function PricingPage() {
   async function load() {
     setIsLoading(true);
     setError(null);
+    setSuccess(null);
     try {
       const response = await apiFetch<PricingConfig | null>(
         "/pricing-configs/global",
@@ -104,6 +107,7 @@ export function PricingPage() {
         body: JSON.stringify(payload),
       });
       setConfig(saved);
+      setSuccess("Đã cập nhật cấu hình chung.");
       await load();
     } catch (saveError) {
       if (saveError instanceof ApiError && saveError.details?.length) {
@@ -124,13 +128,25 @@ export function PricingPage() {
       <section className="rooms-list" aria-labelledby="pricing-title">
         <div className="section-heading">
           <div>
-            <h1 id="pricing-title">Cau hinh</h1>
-            <p>Mot cau hinh phi ap dung cho toan bo he thong</p>
+            <h1 id="pricing-title">Cài đặt</h1>
+            <p>Một cấu hình chung áp dụng cho toàn bộ hệ thống</p>
           </div>
         </div>
         {error ? (
           <div className="notice error" role="alert">
-            {error}
+            <span>{error}</span>
+            <Button
+              type="button"
+              variant="secondary"
+              onClick={() => void load()}
+            >
+              Thử lại
+            </Button>
+          </div>
+        ) : null}
+        {success ? (
+          <div className="notice success" aria-live="polite">
+            {success}
           </div>
         ) : null}
         {isLoading ? (
@@ -140,7 +156,7 @@ export function PricingPage() {
           </div>
         ) : (
           <div className="pricing-stack">
-            <h2>Dang ap dung</h2>
+            <h2>Đang áp dụng</h2>
             <div className="pricing-grid">
               {Object.entries({
                 electricityUnitPrice: config?.electricityUnitPrice,
@@ -155,7 +171,7 @@ export function PricingPage() {
               }).map(([field, value]) => (
                 <article className="pricing-cell" key={field}>
                   <small>{labels[field] ?? field}</small>
-                  <strong>{String(value ?? "-")}</strong>
+                  <strong>{formatConfigValue(field, value)}</strong>
                 </article>
               ))}
             </div>
@@ -166,8 +182,8 @@ export function PricingPage() {
       <section className="room-detail" aria-labelledby="pricing-form-title">
         <div className="section-heading">
           <div>
-            <h2 id="pricing-form-title">Cap nhat cau hinh</h2>
-            <p>Gia phong duoc quan ly rieng trong tab Phong</p>
+            <h2 id="pricing-form-title">Cập nhật cấu hình</h2>
+            <p>Giá phòng được quản lý riêng trong tab Phòng</p>
           </div>
         </div>
         <form className="room-form" onSubmit={(event) => void submit(event)}>
@@ -178,15 +194,22 @@ export function PricingPage() {
                 <input
                   inputMode="numeric"
                   onChange={(event) =>
-                    setForm({ ...form, [field]: event.target.value })
+                    setForm({
+                      ...form,
+                      [field]: normalizeMoneyInput(event.target.value),
+                    })
                   }
                   value={form[field]}
                 />
+                <small className="field-hint">
+                  {formatMoney(form[field])}
+                  {unitFor(field)}
+                </small>
                 <FieldError message={fieldErrors[field]} />
               </label>
             ))}
             <label className="field">
-              Ngay chot
+              Ngày chốt
               <input
                 inputMode="numeric"
                 onChange={(event) =>
@@ -197,7 +220,7 @@ export function PricingPage() {
               <FieldError message={fieldErrors.utilityClosingDay} />
             </label>
             <label className="field">
-              Ngay den han
+              Ngày đến hạn
               <input
                 inputMode="numeric"
                 onChange={(event) =>
@@ -208,7 +231,7 @@ export function PricingPage() {
               <FieldError message={fieldErrors.dueDay} />
             </label>
             <label className="field">
-              Tien te
+              Tiền tệ
               <input
                 onChange={(event) =>
                   setForm({ ...form, currencyCode: event.target.value })
@@ -218,7 +241,7 @@ export function PricingPage() {
               <FieldError message={fieldErrors.currencyCode} />
             </label>
             <label className="field">
-              Mui gio
+              Múi giờ
               <input
                 onChange={(event) =>
                   setForm({ ...form, timezone: event.target.value })
@@ -229,7 +252,7 @@ export function PricingPage() {
             </label>
           </div>
           <label className="field">
-            Ghi chu
+            Ghi chú
             <textarea
               onChange={(event) =>
                 setForm({ ...form, notes: event.target.value })
@@ -239,7 +262,7 @@ export function PricingPage() {
           </label>
           <div className="form-actions">
             <Button type="submit" disabled={isSaving}>
-              {isSaving ? "Dang luu" : "Luu cau hinh"}
+              {isSaving ? "Đang lưu" : "Lưu cấu hình"}
             </Button>
           </div>
         </form>
@@ -252,7 +275,18 @@ function FieldError({ message }: { message?: string }) {
   return message ? <small className="field-error">{message}</small> : null;
 }
 
-function messageFor(error: unknown) {
-  if (error instanceof Error) return error.message;
-  return "Co loi xay ra";
+function unitFor(field: (typeof moneyFields)[number]) {
+  if (field === "electricityUnitPrice") return "/kWh";
+  if (field === "waterUnitPrice") return "/m³";
+  return "";
+}
+
+function formatConfigValue(field: string, value: unknown) {
+  if (value === null || value === undefined || value === "") return "-";
+  if (moneyFields.includes(field as (typeof moneyFields)[number])) {
+    return `${formatMoney(String(value))}${unitFor(field as (typeof moneyFields)[number])}`;
+  }
+  if (field === "utilityClosingDay" || field === "dueDay")
+    return `Ngày ${String(value)}`;
+  return String(value);
 }

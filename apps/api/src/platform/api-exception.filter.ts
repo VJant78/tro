@@ -30,15 +30,16 @@ export class ApiExceptionFilter implements ExceptionFilter {
           requestId,
           errorName:
             exception instanceof Error ? exception.name : "UnknownError",
-          errorMessage:
-            exception instanceof Error ? exception.message : "Unknown error",
         }),
       );
     }
 
     response.status(status).json({
       error: {
-        code: this.codeForStatus(status),
+        code:
+          exception instanceof HttpException
+            ? this.codeForException(exception, status)
+            : this.codeForStatus(status),
         message,
         requestId,
         details:
@@ -47,6 +48,19 @@ export class ApiExceptionFilter implements ExceptionFilter {
             : undefined,
       },
     });
+  }
+
+  private codeForException(exception: HttpException, status: number) {
+    const response = exception.getResponse();
+    if (
+      typeof response === "object" &&
+      response !== null &&
+      "code" in response &&
+      typeof response.code === "string"
+    ) {
+      return response.code;
+    }
+    return this.codeForStatus(status);
   }
 
   private messageForException(exception: HttpException) {

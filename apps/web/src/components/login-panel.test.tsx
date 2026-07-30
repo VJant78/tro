@@ -6,8 +6,8 @@ describe("LoginPanel", () => {
   it("renders an accessible login form", () => {
     render(<LoginPanel />);
 
-    expect(screen.getByRole("form", { name: "Dang nhap" })).toBeInTheDocument();
-    expect(screen.getByLabelText("Email")).toBeInTheDocument();
-    expect(screen.getByLabelText("Mat khau")).toBeInTheDocument();
+    expect(screen.getByRole("form", { name: "Đăng nhập" })).toBeInTheDocument();
+    expect(screen.getByLabelText("Email")).toHaveValue("");
+    expect(screen.getByLabelText("Mật khẩu")).toHaveValue("");
   });
 });

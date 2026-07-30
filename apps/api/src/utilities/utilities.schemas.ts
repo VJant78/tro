@@ -1,18 +1,12 @@
 import { z } from "zod";
+import {
+  boundedMoneySchema,
+  meterReadingSchema,
+  meterValue,
+} from "../platform/numeric.js";
 
 const uuidSchema = z.uuid();
 const dateSchema = z.iso.date();
-const moneySchema = z
-  .union([z.string(), z.number()])
-  .transform((value) => String(value).trim())
-  .refine((value) => /^\d+$/.test(value), "Must be a non-negative integer");
-const decimalSchema = z
-  .union([z.string(), z.number()])
-  .transform((value) => String(value).trim())
-  .refine(
-    (value) => /^\d+(\.\d{1,3})?$/.test(value),
-    "Must be a non-negative number with up to 3 decimals",
-  );
 
 export const utilityReadingKindSchema = z.enum(["MONTHLY", "MOVE_OUT"]);
 export const utilityReadingStatusSchema = z.enum([
@@ -42,10 +36,10 @@ export const utilityReadingCreateSchema = z
     billingPeriodEnd: dateSchema,
     billingYear: z.coerce.number().int().min(2000).max(2100),
     billingMonth: z.coerce.number().int().min(1).max(12),
-    electricityPrevious: decimalSchema,
-    electricityCurrent: decimalSchema,
-    waterPrevious: decimalSchema,
-    waterCurrent: decimalSchema,
+    electricityPrevious: meterReadingSchema,
+    electricityCurrent: meterReadingSchema,
+    waterPrevious: meterReadingSchema,
+    waterCurrent: meterReadingSchema,
     recordedAt: z.iso.datetime().optional(),
     notes: z.string().trim().max(1000).nullable().optional(),
   })
@@ -57,14 +51,17 @@ export const utilityReadingCreateSchema = z
         message: "billingPeriodEnd must be on or after billingPeriodStart",
       });
     }
-    if (Number(input.electricityCurrent) < Number(input.electricityPrevious)) {
+    if (
+      meterValue(input.electricityCurrent) <
+      meterValue(input.electricityPrevious)
+    ) {
       context.addIssue({
         code: "custom",
         path: ["electricityCurrent"],
         message: "electricityCurrent must be greater than previous reading",
       });
     }
-    if (Number(input.waterCurrent) < Number(input.waterPrevious)) {
+    if (meterValue(input.waterCurrent) < meterValue(input.waterPrevious)) {
       context.addIssue({
         code: "custom",
         path: ["waterCurrent"],
@@ -82,16 +79,17 @@ export const settlementInputSchema = z.object({
   utilityReadingId: uuidSchema.nullable().optional(),
   utilityReading: z
     .object({
-      electricityPrevious: decimalSchema,
-      electricityCurrent: decimalSchema,
-      waterPrevious: decimalSchema,
-      waterCurrent: decimalSchema,
+      electricityPrevious: meterReadingSchema,
+      electricityCurrent: meterReadingSchema,
+      waterPrevious: meterReadingSchema,
+      waterCurrent: meterReadingSchema,
     })
     .optional()
     .superRefine((input, context) => {
       if (!input) return;
       if (
-        Number(input.electricityCurrent) < Number(input.electricityPrevious)
+        meterValue(input.electricityCurrent) <
+        meterValue(input.electricityPrevious)
       ) {
         context.addIssue({
           code: "custom",
@@ -99,7 +97,7 @@ export const settlementInputSchema = z.object({
           message: "electricityCurrent must be greater than previous reading",
         });
       }
-      if (Number(input.waterCurrent) < Number(input.waterPrevious)) {
+      if (meterValue(input.waterCurrent) < meterValue(input.waterPrevious)) {
         context.addIssue({
           code: "custom",
           path: ["waterCurrent"],
@@ -107,7 +105,7 @@ export const settlementInputSchema = z.object({
         });
       }
     }),
-  prepaidAmount: moneySchema.default("0"),
+  prepaidAmount: boundedMoneySchema.default("0"),
   notes: z.string().trim().max(1000).nullable().optional(),
 });
 

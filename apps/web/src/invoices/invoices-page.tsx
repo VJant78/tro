@@ -1,9 +1,13 @@
 import { FormEvent, useEffect, useMemo, useState } from "react";
 import { Button, StatusBadge } from "@repo/ui";
-import { ApiError, apiFetch } from "../api";
+import { apiFetch, messageFor } from "../api";
 import type { Invoice, PaymentMethod } from "../billing/types";
-import type { Room, RoomListResponse } from "../rooms/types";
-import type { SettlementPreview } from "../utilities/types";
+import {
+  formatDate,
+  formatMoney,
+  makeIdempotencyKey,
+  normalizeMoneyInput,
+} from "../format";
 
 const emptyPayment = {
   amount: "",
@@ -11,49 +15,77 @@ const emptyPayment = {
   notes: "",
 };
 
-export function InvoicesPage() {
-  const [settlements, setSettlements] = useState<SettlementPreview[]>([]);
-  const [invoices, setInvoices] = useState<Invoice[]>([]);
-  const [rooms, setRooms] = useState<Room[]>([]);
-  const [selectedSettlementId, setSelectedSettlementId] = useState("");
-  const [selectedInvoiceId, setSelectedInvoiceId] = useState("");
-  const [payment, setPayment] = useState(emptyPayment);
-  const [error, setError] = useState<string | null>(null);
-  const [isLoading, setIsLoading] = useState(true);
-  const [isSaving, setIsSaving] = useState(false);
+type PaymentAttempt = {
+  invoiceId: string;
+  amount: string;
+  method: PaymentMethod;
+  notes: string;
+  idempotencyKey: string;
+  paidAt: string;
+};
 
-  const finalizedSettlements = useMemo(
-    () =>
-      settlements.filter(
-        (settlement) => settlement.id && settlement.status === "FINALIZED",
-      ),
-    [settlements],
+export function InvoicesPage() {
+  const [invoices, setInvoices] = useState<Invoice[]>([]);
+  const [selectedInvoiceId, setSelectedInvoiceId] = useState("");
+  const [selectedInvoice, setSelectedInvoice] = useState<Invoice | null>(null);
+  const [payment, setPayment] = useState(emptyPayment);
+  const [paymentAttempt, setPaymentAttempt] = useState<PaymentAttempt | null>(
+    null,
   );
-  const selectedInvoice = useMemo(
+  const [error, setError] = useState<string | null>(null);
+  const [detailError, setDetailError] = useState<string | null>(null);
+  const [printError, setPrintError] = useState<string | null>(null);
+  const [success, setSuccess] = useState<string | null>(null);
+  const [isLoading, setIsLoading] = useState(true);
+  const [isDetailLoading, setIsDetailLoading] = useState(false);
+  const [isSaving, setIsSaving] = useState(false);
+  const [canRecordPayment, setCanRecordPayment] = useState(false);
+
+  const listedInvoice = useMemo(
     () => invoices.find((invoice) => invoice.id === selectedInvoiceId) ?? null,
     [invoices, selectedInvoiceId],
   );
+
+  async function loadDetail(invoiceId: string) {
+    setSelectedInvoiceId(invoiceId);
+    setSelectedInvoice(null);
+    setDetailError(null);
+    setPrintError(null);
+    setIsDetailLoading(true);
+    try {
+      setSelectedInvoice(
+        await apiFetch<Invoice>(`/invoices/${encodeURIComponent(invoiceId)}`),
+      );
+    } catch (loadError) {
+      setDetailError(messageFor(loadError, "Không tải được chi tiết hóa đơn."));
+    } finally {
+      setIsDetailLoading(false);
+    }
+  }
 
   async function load() {
     setIsLoading(true);
     setError(null);
     try {
-      const [settlementResponse, invoiceResponse, roomResponse] =
-        await Promise.all([
-          apiFetch<SettlementPreview[]>("/settlements"),
-          apiFetch<Invoice[]>("/invoices"),
-          apiFetch<RoomListResponse>("/rooms?limit=100&sort=code:asc"),
-        ]);
-      setSettlements(settlementResponse);
+      const [invoiceResponse, currentUser] = await Promise.all([
+        apiFetch<Invoice[]>("/invoices"),
+        apiFetch<{ role: "OWNER" | "MANAGER" | "STAFF" | "VIEWER" }>(
+          "/auth/me",
+        ),
+      ]);
       setInvoices(invoiceResponse);
-      setRooms(roomResponse.data);
-      setSelectedInvoiceId(
-        (current) => current || invoiceResponse[0]?.id || "",
-      );
-      setSelectedSettlementId(
-        (current) =>
-          current || settlementResponse.find((item) => item.id)?.id || "",
-      );
+      setCanRecordPayment(currentUser.role !== "VIEWER");
+      const requestedInvoiceId = new URLSearchParams(
+        window.location.search,
+      ).get("invoiceId");
+      const targetInvoiceId =
+        requestedInvoiceId || selectedInvoiceId || invoiceResponse[0]?.id || "";
+      if (targetInvoiceId) {
+        await loadDetail(targetInvoiceId);
+      } else {
+        setSelectedInvoiceId("");
+        setSelectedInvoice(null);
+      }
     } catch (loadError) {
       setError(messageFor(loadError));
     } finally {
@@ -76,23 +108,24 @@ export function InvoicesPage() {
     }));
   }, [selectedInvoice]);
 
-  async function createInvoice(event: FormEvent<HTMLFormElement>) {
-    event.preventDefault();
-    if (!selectedSettlementId) return;
-    setIsSaving(true);
-    setError(null);
+  useEffect(() => {
+    setPaymentAttempt(null);
+  }, [selectedInvoiceId]);
+
+  function selectInvoice(invoice: Invoice) {
+    const url = new URL(window.location.href);
+    url.searchParams.set("invoiceId", invoice.id);
+    window.history.replaceState({}, "", url);
+    setPayment({ ...emptyPayment, amount: invoice.outstandingAmount });
+    void loadDetail(invoice.id);
+  }
+
+  function printInvoice() {
+    setPrintError(null);
     try {
-      const invoice = await apiFetch<Invoice>("/invoices/from-settlement", {
-        method: "POST",
-        body: JSON.stringify({ settlementId: selectedSettlementId }),
-      });
-      await load();
-      setSelectedInvoiceId(invoice.id);
-      setPayment({ ...emptyPayment, amount: invoice.outstandingAmount });
-    } catch (saveError) {
-      setError(messageFor(saveError));
-    } finally {
-      setIsSaving(false);
+      window.print();
+    } catch {
+      setPrintError("Không thể mở bản in. Hãy thử lại.");
     }
   }
 
@@ -102,18 +135,46 @@ export function InvoicesPage() {
       return;
     setIsSaving(true);
     setError(null);
+    setSuccess(null);
+    const confirmed = window.confirm(
+      `Ghi nhận đã thu ${formatMoney(payment.amount)} cho hóa đơn ${selectedInvoice.invoiceNumber}?`,
+    );
+    if (!confirmed) {
+      setIsSaving(false);
+      return;
+    }
+    const attempt =
+      paymentAttempt?.invoiceId === selectedInvoice.id &&
+      paymentAttempt.amount === payment.amount &&
+      paymentAttempt.method === payment.method &&
+      paymentAttempt.notes === payment.notes
+        ? paymentAttempt
+        : {
+            invoiceId: selectedInvoice.id,
+            amount: payment.amount,
+            method: payment.method,
+            notes: payment.notes,
+            idempotencyKey: makeIdempotencyKey(),
+            paidAt: new Date().toISOString(),
+          };
+    setPaymentAttempt(attempt);
     try {
       await apiFetch("/payments", {
         method: "POST",
-        headers: { "Idempotency-Key": crypto.randomUUID() },
+        headers: { "Idempotency-Key": attempt.idempotencyKey },
         body: JSON.stringify({
           invoiceId: selectedInvoice.id,
           amount: payment.amount,
           method: payment.method,
+          paidAt: attempt.paidAt,
           notes: payment.notes || null,
         }),
       });
+      setSuccess(
+        `Đã thu ${formatMoney(payment.amount)} cho hóa đơn ${selectedInvoice.invoiceNumber}.`,
+      );
       setPayment(emptyPayment);
+      setPaymentAttempt(null);
       await load();
     } catch (saveError) {
       setError(messageFor(saveError));
@@ -127,43 +188,28 @@ export function InvoicesPage() {
       <section className="rooms-list" aria-labelledby="invoices-title">
         <div className="section-heading">
           <div>
-            <h1 id="invoices-title">Hoa don</h1>
-            <p>{invoices.length} hoa don da tao</p>
+            <h1 id="invoices-title">Hóa đơn</h1>
+            <p>{invoices.length} hóa đơn đã tạo</p>
           </div>
         </div>
 
         {error ? (
           <div className="notice error" role="alert">
-            {error}
-          </div>
-        ) : null}
-
-        <form
-          className="invoice-create"
-          onSubmit={(event) => void createInvoice(event)}
-        >
-          <label className="field">
-            Ky da chot
-            <select
-              onChange={(event) => setSelectedSettlementId(event.target.value)}
-              value={selectedSettlementId}
+            <span>{error}</span>
+            <Button
+              type="button"
+              variant="secondary"
+              onClick={() => void load()}
             >
-              <option value="">Chon ky chot</option>
-              {finalizedSettlements.map((settlement) => (
-                <option key={settlement.id ?? ""} value={settlement.id ?? ""}>
-                  Phong {roomCodeFor(settlement.roomId, rooms)} -{" "}
-                  {formatDate(settlement.periodStart)} den{" "}
-                  {formatDate(settlement.periodEnd)}
-                </option>
-              ))}
-            </select>
-          </label>
-          <div className="form-actions">
-            <Button type="submit" disabled={isSaving || !selectedSettlementId}>
-              Tao hoa don
+              Thử lại
             </Button>
           </div>
-        </form>
+        ) : null}
+        {success ? (
+          <div className="notice success" aria-live="polite">
+            {success}
+          </div>
+        ) : null}
 
         {isLoading ? (
           <div className="room-list-stack">
@@ -172,7 +218,10 @@ export function InvoicesPage() {
           </div>
         ) : invoices.length === 0 ? (
           <div className="empty-state">
-            <strong>Chua co hoa don</strong>
+            <strong>Chưa có hóa đơn</strong>
+            <a className="text-link" href="/utilities">
+              Đi đến Chốt tiền
+            </a>
           </div>
         ) : (
           <div className="room-list-stack">
@@ -181,23 +230,17 @@ export function InvoicesPage() {
                 className="room-row"
                 data-active={invoice.id === selectedInvoiceId}
                 key={invoice.id}
-                onClick={() => {
-                  setSelectedInvoiceId(invoice.id);
-                  setPayment({
-                    ...emptyPayment,
-                    amount: invoice.outstandingAmount,
-                  });
-                }}
+                onClick={() => selectInvoice(invoice)}
                 type="button"
               >
                 <span>
                   <strong>{invoice.invoiceNumber}</strong>
                   <small>
-                    Phong {invoice.roomCode ?? invoice.roomId.slice(0, 8)} -{" "}
-                    {invoice.payerTenantName ?? "Nguoi dai dien"}
+                    Phòng {invoice.roomCode ?? "-"} ·{" "}
+                    {invoice.payerTenantName ?? "Chưa xác định"}
                   </small>
                   <small>
-                    Con thu: {formatMoney(invoice.outstandingAmount)}
+                    Còn thu: {formatMoney(invoice.outstandingAmount)}
                   </small>
                 </span>
                 <StatusBadge tone={statusTone(invoice.status)}>
@@ -209,114 +252,215 @@ export function InvoicesPage() {
         )}
       </section>
 
-      <section className="room-detail" aria-labelledby="invoice-detail-title">
-        <div className="section-heading">
+      <section
+        className="room-detail invoice-detail-panel"
+        aria-busy={isDetailLoading}
+        aria-labelledby="invoice-detail-title"
+      >
+        <div className="section-heading invoice-screen-heading">
           <div>
-            <h2 id="invoice-detail-title">Chi tiet hoa don</h2>
+            <h2 id="invoice-detail-title">Chi tiết hóa đơn</h2>
             <p>
-              {selectedInvoice ? selectedInvoice.invoiceNumber : "Chon hoa don"}
+              {selectedInvoice
+                ? selectedInvoice.invoiceNumber
+                : (listedInvoice?.invoiceNumber ?? "Chọn hóa đơn")}
             </p>
           </div>
+          <Button
+            className="invoice-print-action"
+            disabled={!selectedInvoice || isDetailLoading}
+            onClick={printInvoice}
+            type="button"
+            variant="secondary"
+          >
+            In hóa đơn
+          </Button>
         </div>
 
-        {selectedInvoice ? (
-          <>
+        {detailError ? (
+          <div className="notice error" role="alert">
+            <span>{detailError}</span>
+            <Button
+              type="button"
+              variant="secondary"
+              onClick={() => void loadDetail(selectedInvoiceId)}
+            >
+              Thử lại
+            </Button>
+          </div>
+        ) : isDetailLoading ? (
+          <div
+            className="invoice-detail-skeleton"
+            aria-label="Đang tải hóa đơn"
+          >
+            <div className="skeleton-row" />
+            <div className="skeleton-row" />
+            <div className="skeleton-row" />
+          </div>
+        ) : selectedInvoice ? (
+          <div className="invoice-print-sheet">
+            <h3 className="invoice-document-title">
+              HÓA ĐƠN PHÒNG {selectedInvoice.roomCode ?? "-"} - THÁNG{" "}
+              {invoiceMonthLabel(selectedInvoice)}
+            </h3>
             <div className="settlement-grid invoice-facts">
+              <Fact label="Mã hóa đơn" value={selectedInvoice.invoiceNumber} />
               <Fact
-                label="Ky tinh"
+                label="Người đại diện"
+                value={selectedInvoice.payerTenantName ?? "Chưa xác định"}
+              />
+              <Fact
+                label="Kỳ tính"
                 value={`${formatDate(selectedInvoice.billingPeriodStart)} - ${formatDate(selectedInvoice.billingPeriodEnd)}`}
               />
-              <Fact label="Han thu" value={formatDate(selectedInvoice.dueOn)} />
               <Fact
-                label="Tong tien"
+                label="Ngày phát hành"
+                value={formatDate(selectedInvoice.issuedOn)}
+              />
+              <Fact label="Hạn thu" value={formatDate(selectedInvoice.dueOn)} />
+              <Fact
+                label="Tổng hóa đơn"
                 value={formatMoney(selectedInvoice.totalAmount)}
               />
               <Fact
-                label="Da thu"
+                label="Đã thanh toán"
                 value={formatMoney(selectedInvoice.paidAmount)}
               />
               <Fact
-                label="Con thu"
+                label="Còn phải thu"
                 value={formatMoney(selectedInvoice.outstandingAmount)}
+              />
+              <Fact
+                label="Trạng thái"
+                value={statusLabel(selectedInvoice.status)}
               />
             </div>
 
             <div className="invoice-items">
               {selectedInvoice.items.map((item) => (
-                <div className="invoice-item-row" key={item.id}>
-                  <span>
-                    <strong>{item.description}</strong>
-                    <small>
-                      {Number(item.quantity).toLocaleString("vi-VN")}{" "}
-                      {item.unit ?? ""}
-                    </small>
+                <div
+                  aria-label={invoiceItemAccessibleLabel(item)}
+                  className={`invoice-item-row${item.itemType === "RENT" ? " invoice-item-row-rent" : ""}`}
+                  key={item.id}
+                >
+                  <span className="invoice-item-main">
+                    <strong>
+                      {invoiceItemLabel(
+                        item.itemType,
+                        item.description,
+                        selectedInvoice,
+                      )}
+                    </strong>
+                    {isUtilityItem(item.itemType) ? (
+                      item.utilityUsage ? (
+                        <UtilityEquation usage={item.utilityUsage} />
+                      ) : (
+                        <small className="utility-usage-unavailable">
+                          Chưa có đủ chỉ số để đối chiếu
+                        </small>
+                      )
+                    ) : (
+                      <small>
+                        {formatDecimal(item.quantity)} {item.unit ?? ""}
+                      </small>
+                    )}
                   </span>
-                  <strong>{formatMoney(item.amount)}</strong>
+                  {item.itemType !== "RENT" ? (
+                    <span className="invoice-item-money">
+                      <small>Đơn giá</small>
+                      <strong>
+                        {formatMoney(
+                          item.utilityUsage?.unitPrice ?? item.unitPrice,
+                        )}
+                      </strong>
+                    </span>
+                  ) : null}
+                  <span className="invoice-item-money">
+                    <small>Thành tiền</small>
+                    <strong>{formatMoney(item.amount)}</strong>
+                  </span>
                 </div>
               ))}
             </div>
 
-            <form
-              className="room-form"
-              onSubmit={(event) => void createPayment(event)}
-            >
-              <div className="form-grid">
+            {printError ? (
+              <div className="notice error invoice-print-error" role="alert">
+                {printError}
+              </div>
+            ) : null}
+
+            {canRecordPayment ? (
+              <form
+                className="room-form invoice-payment-form"
+                onSubmit={(event) => void createPayment(event)}
+              >
+                <div className="form-grid">
+                  <label className="field">
+                    Số tiền thu
+                    <input
+                      disabled={Number(selectedInvoice.outstandingAmount) <= 0}
+                      inputMode="numeric"
+                      onChange={(event) =>
+                        setPayment({
+                          ...payment,
+                          amount: normalizeMoneyInput(event.target.value),
+                        })
+                      }
+                      value={payment.amount}
+                    />
+                    <small className="field-hint">
+                      Còn tối đa{" "}
+                      {formatMoney(selectedInvoice.outstandingAmount)}
+                    </small>
+                  </label>
+                  <label className="field">
+                    Hình thức
+                    <select
+                      disabled={Number(selectedInvoice.outstandingAmount) <= 0}
+                      onChange={(event) =>
+                        setPayment({
+                          ...payment,
+                          method: event.target.value as PaymentMethod,
+                        })
+                      }
+                      value={payment.method}
+                    >
+                      <option value="CASH">Tiền mặt</option>
+                      <option value="BANK_TRANSFER">Chuyển khoản</option>
+                      <option value="OTHER">Khác</option>
+                    </select>
+                  </label>
+                </div>
                 <label className="field">
-                  So tien thu
-                  <input
+                  Ghi chú
+                  <textarea
                     disabled={Number(selectedInvoice.outstandingAmount) <= 0}
-                    inputMode="numeric"
                     onChange={(event) =>
-                      setPayment({ ...payment, amount: event.target.value })
+                      setPayment({ ...payment, notes: event.target.value })
                     }
-                    value={payment.amount}
+                    value={payment.notes}
                   />
                 </label>
-                <label className="field">
-                  Hinh thuc
-                  <select
-                    disabled={Number(selectedInvoice.outstandingAmount) <= 0}
-                    onChange={(event) =>
-                      setPayment({
-                        ...payment,
-                        method: event.target.value as PaymentMethod,
-                      })
+                <div className="form-actions">
+                  <Button
+                    type="submit"
+                    disabled={
+                      isSaving ||
+                      Number(selectedInvoice.outstandingAmount) <= 0 ||
+                      Number(payment.amount) <= 0 ||
+                      Number(payment.amount) >
+                        Number(selectedInvoice.outstandingAmount)
                     }
-                    value={payment.method}
                   >
-                    <option value="CASH">Tien mat</option>
-                    <option value="BANK_TRANSFER">Chuyen khoan</option>
-                    <option value="OTHER">Khac</option>
-                  </select>
-                </label>
-              </div>
-              <label className="field">
-                Ghi chu
-                <textarea
-                  disabled={Number(selectedInvoice.outstandingAmount) <= 0}
-                  onChange={(event) =>
-                    setPayment({ ...payment, notes: event.target.value })
-                  }
-                  value={payment.notes}
-                />
-              </label>
-              <div className="form-actions">
-                <Button
-                  type="submit"
-                  disabled={
-                    isSaving ||
-                    Number(selectedInvoice.outstandingAmount) <= 0 ||
-                    Number(payment.amount) <= 0
-                  }
-                >
-                  Ghi nhan thanh toan
-                </Button>
-              </div>
-            </form>
-          </>
+                    {isSaving ? "Đang ghi nhận" : "Ghi nhận thanh toán"}
+                  </Button>
+                </div>
+              </form>
+            ) : null}
+          </div>
         ) : (
           <div className="empty-state">
-            <strong>Chua chon hoa don</strong>
+            <strong>Chưa chọn hóa đơn</strong>
           </div>
         )}
       </section>
@@ -333,6 +477,79 @@ function Fact({ label, value }: { label: string; value: string }) {
   );
 }
 
+function UtilityEquation({
+  usage,
+}: {
+  usage: NonNullable<Invoice["items"][number]["utilityUsage"]>;
+}) {
+  const unit = displayUnit(usage.unit);
+  return (
+    <span className="utility-equation">
+      <span>
+        <small>Chỉ số cũ</small>
+        <strong>
+          {formatDecimal(usage.previous)} {unit}
+        </strong>
+      </span>
+      <span aria-hidden="true" className="utility-equation-symbol">
+        →
+      </span>
+      <span>
+        <small>Chỉ số mới</small>
+        <strong>
+          {formatDecimal(usage.current)} {unit}
+        </strong>
+      </span>
+      <span aria-hidden="true" className="utility-equation-symbol">
+        =
+      </span>
+      <span>
+        <small>Đã dùng</small>
+        <strong>
+          {formatDecimal(usage.usage)} {unit}
+        </strong>
+      </span>
+    </span>
+  );
+}
+
+function isUtilityItem(itemType: string) {
+  return itemType === "ELECTRICITY" || itemType === "WATER";
+}
+
+function displayUnit(unit: "kWh" | "m3") {
+  return unit === "m3" ? "m³" : unit;
+}
+
+function formatDecimal(value: string) {
+  const numeric = Number(value);
+  return Number.isFinite(numeric)
+    ? new Intl.NumberFormat("vi-VN", { maximumFractionDigits: 6 }).format(
+        numeric,
+      )
+    : value;
+}
+
+function invoiceItemAccessibleLabel(item: Invoice["items"][number]) {
+  if (item.itemType === "RENT") {
+    return `${item.description}, thành tiền ${formatMoney(item.amount)}`;
+  }
+  if (!isUtilityItem(item.itemType)) {
+    return `${item.description}, đơn giá ${formatMoney(item.unitPrice)}, thành tiền ${formatMoney(item.amount)}`;
+  }
+  if (!item.utilityUsage) {
+    return `${item.description}, chưa có đủ chỉ số để đối chiếu, thành tiền ${formatMoney(item.amount)}`;
+  }
+  const unit = displayUnit(item.utilityUsage.unit);
+  return `${item.description}, chỉ số cũ ${formatDecimal(item.utilityUsage.previous)} ${unit}, chỉ số mới ${formatDecimal(item.utilityUsage.current)} ${unit}, đã dùng ${formatDecimal(item.utilityUsage.usage)} ${unit}, đơn giá ${formatMoney(item.utilityUsage.unitPrice)}, thành tiền ${formatMoney(item.utilityUsage.amount)}`;
+}
+
+function invoiceMonthLabel(invoice: Invoice) {
+  const month = Number(invoice.billingPeriodEnd.slice(5, 7));
+  const year = invoice.billingPeriodEnd.slice(0, 4);
+  return `${month}/${year}`;
+}
+
 function statusTone(status: string) {
   if (status === "PAID") return "success";
   if (status === "PARTIALLY_PAID") return "warning";
@@ -341,27 +558,26 @@ function statusTone(status: string) {
 }
 
 function statusLabel(status: string) {
-  if (status === "PAID") return "Da thu";
-  if (status === "PARTIALLY_PAID") return "Thu mot phan";
-  if (status === "CANCELLED") return "Da huy";
-  return "Dang thu";
+  if (status === "PAID") return "Đã thu";
+  if (status === "PARTIALLY_PAID") return "Thu một phần";
+  if (status === "CANCELLED") return "Đã hủy";
+  if (status === "OVERDUE") return "Quá hạn";
+  return "Đang thu";
 }
 
-function formatMoney(value: string | number) {
-  return new Intl.NumberFormat("vi-VN").format(Number(value)) + " VND";
-}
-
-function formatDate(value: string) {
-  if (!value) return "-";
-  return new Intl.DateTimeFormat("vi-VN").format(new Date(`${value}T00:00:00`));
-}
-
-function roomCodeFor(roomId: string, rooms: Room[]) {
-  return rooms.find((room) => room.id === roomId)?.code ?? roomId.slice(0, 8);
-}
-
-function messageFor(error: unknown) {
-  if (error instanceof ApiError) return error.message;
-  if (error instanceof Error) return error.message;
-  return "Co loi xay ra";
+function invoiceItemLabel(
+  itemType: string,
+  description: string,
+  invoice: Invoice,
+) {
+  if (itemType === "ELECTRICITY") return "Tiền điện";
+  if (itemType === "WATER") return "Tiền nước";
+  if (itemType !== "RENT") return description;
+  const month = Number(invoice.billingPeriodEnd.slice(5, 7));
+  const year = invoice.billingPeriodEnd.slice(0, 4);
+  const startDay = Number(invoice.billingPeriodStart.slice(8, 10));
+  const endDay = Number(invoice.billingPeriodEnd.slice(8, 10));
+  const fullMonth =
+    startDay === 1 && endDay === new Date(Number(year), month, 0).getDate();
+  return `Tiền phòng tháng ${month}/${year}${fullMonth ? "" : ` · ${endDay - startDay + 1} ngày`}`;
 }

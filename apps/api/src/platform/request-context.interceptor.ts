@@ -13,12 +13,22 @@ import { runWithRequestContext } from "./request-context.js";
 export class RequestContextInterceptor implements NestInterceptor {
   intercept(context: ExecutionContext, next: CallHandler): Observable<unknown> {
     const http = context.switchToHttp();
-    const request = http.getRequest<Request>();
+    const request = http.getRequest<
+      Request & { user?: { propertyId?: string } }
+    >();
     const response = http.getResponse<Response>();
     const requestId = request.header("x-request-id") ?? `req_${randomUUID()}`;
 
     response.setHeader("x-request-id", requestId);
 
-    return runWithRequestContext({ requestId }, () => next.handle());
+    return runWithRequestContext(
+      {
+        requestId,
+        propertyId: request.user?.propertyId,
+        ipAddress: request.ip,
+        userAgent: request.header("user-agent"),
+      },
+      () => next.handle(),
+    );
   }
 }

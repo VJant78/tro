@@ -1,6 +1,12 @@
 import { Inject, Injectable } from "@nestjs/common";
 import { AuditService } from "../audit/audit.service.js";
+import { TenantsService } from "../tenants/tenants.service.js";
+import { assertAuthorizedPropertyId } from "../platform/property-scope.js";
 import { ROOM_REPOSITORY } from "./rooms.tokens.js";
+import {
+  DerivedRoomStatusException,
+  RoomHasActiveOccupantsException,
+} from "./rooms.errors.js";
 import type {
   RoomCreateInput,
   RoomListQuery,
@@ -13,6 +19,7 @@ export class RoomsService {
   constructor(
     @Inject(ROOM_REPOSITORY) private readonly rooms: RoomRepository,
     @Inject(AuditService) private readonly audit: AuditService,
+    @Inject(TenantsService) private readonly tenants: TenantsService,
   ) {}
 
   list(query: RoomListQuery) {
@@ -24,6 +31,8 @@ export class RoomsService {
   }
 
   async create(input: RoomCreateInput, actorUserId?: string) {
+    assertAuthorizedPropertyId(input.propertyId);
+    if (input.status === "OCCUPIED") throw new DerivedRoomStatusException();
     const room = await this.rooms.create(input);
     await this.audit.record({
       action: "CREATE",
@@ -37,6 +46,14 @@ export class RoomsService {
 
   async update(id: string, input: RoomUpdateInput, actorUserId?: string) {
     const before = await this.rooms.findById(id);
+    if (!before) return null;
+    if (input.status === "OCCUPIED") throw new DerivedRoomStatusException();
+    if (
+      input.status &&
+      (before.currentOccupancy || (await this.hasActiveOccupancy(id)))
+    ) {
+      throw new RoomHasActiveOccupantsException();
+    }
     const room = await this.rooms.update(id, input);
     if (!room) return null;
 
@@ -53,6 +70,10 @@ export class RoomsService {
 
   async retire(id: string, actorUserId?: string) {
     const before = await this.rooms.findById(id);
+    if (!before) return null;
+    if (before.currentOccupancy || (await this.hasActiveOccupancy(id))) {
+      throw new RoomHasActiveOccupantsException();
+    }
     const room = await this.rooms.retire(id);
     if (!room) return null;
 
@@ -66,5 +87,14 @@ export class RoomsService {
       metadata: { mode: "soft-delete-retire" },
     });
     return room;
+  }
+
+  private async hasActiveOccupancy(roomId: string) {
+    return (await this.tenants.listTenancies()).some(
+      (tenancy) =>
+        tenancy.roomId === roomId &&
+        tenancy.status === "ACTIVE" &&
+        tenancy.memberCount > 0,
+    );
   }
 }

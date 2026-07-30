@@ -49,4 +49,36 @@ export interface SettlementPreview {
   creditBalanceBefore?: string;
   newPrepaidAmount?: string;
   creditBalanceAfter?: string;
+  invoicePending?: boolean;
+}
+
+export interface FinalizeSettlementResponse {
+  operation: {
+    id: string;
+    status: "INVOICE_PENDING" | "COMPLETED" | "ACTION_REQUIRED";
+    replayed: boolean;
+    retryable: boolean;
+  };
+  settlement: SettlementPreview;
+  invoice: {
+    id: string;
+    invoiceNumber: string;
+    outstandingAmount: string;
+  } | null;
+}
+
+export type RecoverableOperationStatus = "INVOICE_PENDING" | "ACTION_REQUIRED";
+
+export interface OperationRecoveryResponse {
+  operation?: {
+    id: string;
+    status: RecoverableOperationStatus | "COMPLETED" | "CANCELLED";
+    replayed: boolean;
+    retryable: boolean;
+  };
+  id?: string;
+  status?: RecoverableOperationStatus | "COMPLETED" | "CANCELLED";
+  replayed?: boolean;
+  cancelledAt?: string | null;
+  cancelReason?: string | null;
 }

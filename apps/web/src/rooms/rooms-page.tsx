@@ -1,13 +1,15 @@
 import { FormEvent, useEffect, useMemo, useState } from "react";
 import { Button, StatusBadge } from "@repo/ui";
-import { ApiError, apiFetch } from "../api";
+import { ApiError, apiFetch, messageFor } from "../api";
+import { formatDate, formatMoney, normalizeMoneyInput } from "../format";
+import { ReceiptDialog } from "../receipts/receipt-dialog";
 import type { Room, RoomListResponse, RoomStatus } from "./types";
 
 const statusLabels: Record<RoomStatus, string> = {
-  VACANT: "Trong",
-  OCCUPIED: "Dang thue",
-  MAINTENANCE: "Bao tri",
-  INACTIVE: "Ngung dung",
+  VACANT: "Trống",
+  OCCUPIED: "Đang thuê",
+  MAINTENANCE: "Bảo trì",
+  INACTIVE: "Ngừng dùng",
 };
 
 const statusTones: Record<
@@ -40,7 +42,11 @@ export function RoomsPage() {
   const [isLoading, setIsLoading] = useState(true);
   const [isSaving, setIsSaving] = useState(false);
   const [error, setError] = useState<string | null>(null);
+  const [success, setSuccess] = useState<string | null>(null);
   const [fieldErrors, setFieldErrors] = useState<Record<string, string>>({});
+  const [receiptDialog, setReceiptDialog] = useState<
+    "collect" | "history" | null
+  >(null);
 
   const selectedRoom = useMemo(
     () => rooms.find((room) => room.id === selectedId) ?? null,
@@ -60,11 +66,26 @@ export function RoomsPage() {
         `/rooms?${params.toString()}`,
       );
       setRooms(response.data);
-      setSelectedId((current) =>
-        current && response.data.some((room) => room.id === current)
-          ? current
-          : (response.data[0]?.id ?? null),
+      const requestedId = new URLSearchParams(window.location.search).get(
+        "roomId",
       );
+      const nextRoom =
+        response.data.find((room) => room.id === requestedId) ??
+        response.data.find((room) => room.id === selectedId) ??
+        response.data[0] ??
+        null;
+      if (nextRoom) selectRoom(nextRoom);
+      else startCreate();
+      const requestedReceiptView = new URLSearchParams(
+        window.location.search,
+      ).get("receipts");
+      if (
+        nextRoom?.currentOccupancy &&
+        (requestedReceiptView === "collect" ||
+          requestedReceiptView === "history")
+      ) {
+        setReceiptDialog(requestedReceiptView);
+      }
     } catch (loadError) {
       setError(messageFor(loadError));
     } finally {
@@ -80,21 +101,14 @@ export function RoomsPage() {
     setMode("edit");
     setSelectedId(room.id);
     setFieldErrors({});
-    setForm({
-      code: room.code,
-      name: room.name,
-      defaultRentAmount: room.defaultRentAmount,
-      depositAmount: room.depositAmount,
-      maxOccupants: String(room.maxOccupants),
-      notes: room.notes ?? "",
-      status: room.status,
-    });
+    setForm(roomToForm(room));
   }
 
   function startCreate() {
     setMode("create");
     setSelectedId(null);
     setFieldErrors({});
+    setSuccess(null);
     setForm(emptyForm);
   }
 
@@ -102,17 +116,20 @@ export function RoomsPage() {
     event.preventDefault();
     setIsSaving(true);
     setError(null);
+    setSuccess(null);
     setFieldErrors({});
 
-    const payload = {
+    const payload: Record<string, unknown> = {
       code: form.code,
       name: form.name,
       defaultRentAmount: form.defaultRentAmount,
       depositAmount: form.depositAmount,
       maxOccupants: Number(form.maxOccupants),
-      status: form.status,
       notes: form.notes || null,
     };
+    if (mode === "create" || !selectedRoom?.currentOccupancy) {
+      payload.status = form.status === "MAINTENANCE" ? "MAINTENANCE" : "VACANT";
+    }
 
     try {
       const room =
@@ -126,6 +143,11 @@ export function RoomsPage() {
               body: JSON.stringify(payload),
             });
 
+      setSuccess(
+        mode === "edit"
+          ? `Đã cập nhật phòng ${room.code}.`
+          : `Đã tạo phòng ${room.code}.`,
+      );
       await loadRooms();
       selectRoom(room);
     } catch (saveError) {
@@ -151,11 +173,13 @@ export function RoomsPage() {
 
     setIsSaving(true);
     setError(null);
+    setSuccess(null);
 
     try {
       await apiFetch<Room>(`/rooms/${selectedRoom.id}`, { method: "DELETE" });
       startCreate();
       await loadRooms();
+      setSuccess(`Đã ngừng sử dụng phòng ${selectedRoom.code}.`);
     } catch (retireError) {
       setError(messageFor(retireError));
     } finally {
@@ -168,60 +192,72 @@ export function RoomsPage() {
       <section className="rooms-list" aria-labelledby="rooms-title">
         <div className="section-heading">
           <div>
-            <h1 id="rooms-title">Phong</h1>
-            <p>{rooms.length} phong dang hien thi</p>
+            <h1 id="rooms-title">Phòng</h1>
+            <p>{rooms.length} phòng đang hiển thị</p>
           </div>
           <Button type="button" onClick={startCreate}>
-            Tao phong
+            Tạo phòng
           </Button>
         </div>
 
         <div className="toolbar">
           <input
-            aria-label="Tim phong"
+            aria-label="Tìm phòng"
             onChange={(event) => setQuery(event.target.value)}
-            placeholder="Tim ma phong, ten phong"
+            placeholder="Tìm mã phòng, tên phòng"
             value={query}
           />
           <select
-            aria-label="Loc trang thai"
+            aria-label="Lọc trạng thái"
             onChange={(event) =>
               setStatus(event.target.value as RoomStatus | "ALL")
             }
             value={status}
           >
-            <option value="ALL">Tat ca</option>
-            <option value="VACANT">Trong</option>
-            <option value="OCCUPIED">Dang thue</option>
-            <option value="MAINTENANCE">Bao tri</option>
-            <option value="INACTIVE">Ngung dung</option>
+            <option value="ALL">Tất cả</option>
+            <option value="VACANT">Trống</option>
+            <option value="OCCUPIED">Đang thuê</option>
+            <option value="MAINTENANCE">Bảo trì</option>
+            <option value="INACTIVE">Ngừng dùng</option>
           </select>
           <Button
             type="button"
             variant="secondary"
             onClick={() => void loadRooms()}
           >
-            Loc
+            Lọc
           </Button>
         </div>
 
         {error ? (
           <div className="notice error" role="alert">
-            {error}
+            <span>{error}</span>
+            <Button
+              type="button"
+              variant="secondary"
+              onClick={() => void loadRooms()}
+            >
+              Thử lại
+            </Button>
+          </div>
+        ) : null}
+        {success ? (
+          <div className="notice success" aria-live="polite">
+            {success}
           </div>
         ) : null}
 
         {isLoading ? (
-          <div className="room-list-stack" aria-label="Dang tai phong">
+          <div className="room-list-stack" aria-label="Đang tải phòng">
             <div className="skeleton-row" />
             <div className="skeleton-row" />
             <div className="skeleton-row" />
           </div>
         ) : rooms.length === 0 ? (
           <div className="empty-state">
-            <strong>Chua co phong</strong>
+            <strong>Chưa có phòng</strong>
             <Button type="button" onClick={startCreate}>
-              Tao phong dau tien
+              Tạo phòng đầu tiên
             </Button>
           </div>
         ) : (
@@ -239,14 +275,14 @@ export function RoomsPage() {
                   <small>{room.name}</small>
                   {room.currentOccupancy ? (
                     <small>
-                      Dai dien: {room.currentOccupancy.representativeName}
-                      {" - "}vao {formatDate(room.currentOccupancy.startedOn)}
+                      Đại diện: {room.currentOccupancy.representativeName}
+                      {" - "}vào {formatDate(room.currentOccupancy.startedOn)}
                       {room.currentOccupancy.coTenantCount > 0
-                        ? ` - +${room.currentOccupancy.coTenantCount} o chung`
+                        ? ` - +${room.currentOccupancy.coTenantCount} ở chung`
                         : ""}
                     </small>
                   ) : (
-                    <small>Chua co nguoi thue</small>
+                    <small>Chưa có người thuê</small>
                   )}
                 </span>
                 <StatusBadge tone={statusTones[room.status]}>
@@ -262,9 +298,13 @@ export function RoomsPage() {
         <div className="section-heading">
           <div>
             <h2 id="room-form-title">
-              {mode === "edit" ? "Chi tiet phong" : "Tao phong"}
+              {mode === "edit" ? "Chi tiết phòng" : "Tạo phòng"}
             </h2>
-            <p>{selectedRoom ? selectedRoom.id : "Phong moi"}</p>
+            <p>
+              {selectedRoom
+                ? `${selectedRoom.code} · ${selectedRoom.name}`
+                : "Phòng mới"}
+            </p>
           </div>
           {mode === "edit" ? (
             <Button
@@ -272,21 +312,36 @@ export function RoomsPage() {
               variant="danger"
               onClick={() => void retireSelected()}
             >
-              Ngung dung
+              Ngừng dùng
             </Button>
           ) : null}
         </div>
 
         <form className="room-form" onSubmit={(event) => void submit(event)}>
           {selectedRoom?.currentOccupancy ? (
-            <section className="occupancy-panel" aria-label="Nguoi dang o">
+            <section className="occupancy-panel" aria-label="Người đang ở">
               <div className="section-heading compact">
                 <div>
-                  <h3>Nguoi dang o</h3>
+                  <h3>Người đang ở</h3>
                   <p>
-                    {selectedRoom.currentOccupancy.memberCount} nguoi, vao phong{" "}
+                    {selectedRoom.currentOccupancy.memberCount} người, vào phòng{" "}
                     {formatDate(selectedRoom.currentOccupancy.startedOn)}
                   </p>
+                </div>
+                <div className="role-actions">
+                  <Button
+                    onClick={() => setReceiptDialog("history")}
+                    type="button"
+                    variant="secondary"
+                  >
+                    Lịch sử thu
+                  </Button>
+                  <Button
+                    onClick={() => setReceiptDialog("collect")}
+                    type="button"
+                  >
+                    Thu tiền
+                  </Button>
                 </div>
               </div>
               <div className="tenant-member-list">
@@ -294,7 +349,7 @@ export function RoomsPage() {
                   <div className="member-row" key={occupant.tenantId}>
                     <span>
                       <strong>{occupant.fullName}</strong>
-                      <small>{occupant.phone ?? "Chua co SĐT"}</small>
+                      <small>{occupant.phone ?? "Chưa có SĐT"}</small>
                     </span>
                     <StatusBadge
                       tone={
@@ -304,8 +359,8 @@ export function RoomsPage() {
                       }
                     >
                       {occupant.role === "REPRESENTATIVE"
-                        ? "Dai dien"
-                        : "O chung"}
+                        ? "Đại diện"
+                        : "Ở chung"}
                     </StatusBadge>
                   </div>
                 ))}
@@ -313,7 +368,7 @@ export function RoomsPage() {
             </section>
           ) : null}
           <label className="field">
-            Ma phong
+            Mã phòng
             <input
               name="code"
               onChange={(event) =>
@@ -324,7 +379,7 @@ export function RoomsPage() {
             <FieldError message={fieldErrors.code} />
           </label>
           <label className="field">
-            Ten phong
+            Tên phòng
             <input
               name="name"
               onChange={(event) =>
@@ -336,31 +391,43 @@ export function RoomsPage() {
           </label>
           <div className="form-grid">
             <label className="field">
-              Gia thue
+              Giá thuê
               <input
                 inputMode="numeric"
                 name="defaultRentAmount"
                 onChange={(event) =>
-                  setForm({ ...form, defaultRentAmount: event.target.value })
+                  setForm({
+                    ...form,
+                    defaultRentAmount: normalizeMoneyInput(event.target.value),
+                  })
                 }
                 value={form.defaultRentAmount}
               />
+              <small className="field-hint">
+                {formatMoney(form.defaultRentAmount)}
+              </small>
               <FieldError message={fieldErrors.defaultRentAmount} />
             </label>
             <label className="field">
-              Dat coc
+              Đặt cọc
               <input
                 inputMode="numeric"
                 name="depositAmount"
                 onChange={(event) =>
-                  setForm({ ...form, depositAmount: event.target.value })
+                  setForm({
+                    ...form,
+                    depositAmount: normalizeMoneyInput(event.target.value),
+                  })
                 }
                 value={form.depositAmount}
               />
+              <small className="field-hint">
+                {formatMoney(form.depositAmount)}
+              </small>
               <FieldError message={fieldErrors.depositAmount} />
             </label>
             <label className="field">
-              So nguoi toi da
+              Số người tối đa
               <input
                 inputMode="numeric"
                 name="maxOccupants"
@@ -371,24 +438,41 @@ export function RoomsPage() {
               />
               <FieldError message={fieldErrors.maxOccupants} />
             </label>
-            <label className="field">
-              Trang thai
-              <select
-                name="status"
-                onChange={(event) =>
-                  setForm({ ...form, status: event.target.value as RoomStatus })
-                }
-                value={form.status}
-              >
-                <option value="VACANT">Trong</option>
-                <option value="OCCUPIED">Dang thue</option>
-                <option value="MAINTENANCE">Bao tri</option>
-                <option value="INACTIVE">Ngung dung</option>
-              </select>
-            </label>
+            <div className="field">
+              Trạng thái sử dụng
+              <div className="read-only-status">
+                <StatusBadge
+                  tone={statusTones[selectedRoom?.status ?? form.status]}
+                >
+                  {statusLabels[selectedRoom?.status ?? form.status]}
+                </StatusBadge>
+                <small>
+                  Trạng thái trống/đang thuê được hệ thống tự xác định.
+                </small>
+              </div>
+            </div>
+            {!selectedRoom?.currentOccupancy &&
+            selectedRoom?.status !== "INACTIVE" ? (
+              <label className="field">
+                Tình trạng vận hành
+                <select
+                  name="status"
+                  onChange={(event) =>
+                    setForm({
+                      ...form,
+                      status: event.target.value as RoomStatus,
+                    })
+                  }
+                  value={form.status}
+                >
+                  <option value="VACANT">Sẵn sàng cho thuê</option>
+                  <option value="MAINTENANCE">Bảo trì</option>
+                </select>
+              </label>
+            ) : null}
           </div>
           <label className="field">
-            Ghi chu
+            Ghi chú
             <textarea
               name="notes"
               onChange={(event) =>
@@ -399,11 +483,24 @@ export function RoomsPage() {
           </label>
           <div className="form-actions">
             <Button type="submit" disabled={isSaving}>
-              {isSaving ? "Dang luu" : mode === "edit" ? "Luu" : "Tao"}
+              {isSaving
+                ? "Đang lưu"
+                : mode === "edit"
+                  ? "Lưu thay đổi"
+                  : "Tạo phòng"}
             </Button>
           </div>
         </form>
       </section>
+      {receiptDialog && selectedRoom?.currentOccupancy ? (
+        <ReceiptDialog
+          initialView={receiptDialog}
+          key={`${selectedRoom.currentOccupancy.tenancyId}-${receiptDialog}`}
+          onClose={() => setReceiptDialog(null)}
+          onCollected={(message) => setSuccess(message)}
+          room={selectedRoom}
+        />
+      ) : null}
     </div>
   );
 }
@@ -412,12 +509,14 @@ function FieldError({ message }: { message?: string }) {
   return message ? <small className="field-error">{message}</small> : null;
 }
 
-function messageFor(error: unknown) {
-  if (error instanceof Error) return error.message;
-  return "Co loi xay ra";
-}
-
-function formatDate(value: string) {
-  if (!value) return "-";
-  return new Intl.DateTimeFormat("vi-VN").format(new Date(`${value}T00:00:00`));
+function roomToForm(room: Room) {
+  return {
+    code: room.code,
+    name: room.name,
+    defaultRentAmount: room.defaultRentAmount,
+    depositAmount: room.depositAmount,
+    maxOccupants: String(room.maxOccupants),
+    notes: room.notes ?? "",
+    status: room.status,
+  };
 }

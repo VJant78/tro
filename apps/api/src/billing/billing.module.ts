@@ -8,12 +8,15 @@ import { BillingService } from "./billing.service.js";
 import { BILLING_REPOSITORY } from "./billing.tokens.js";
 import { InMemoryBillingRepository } from "./in-memory-billing.repository.js";
 import { PrismaBillingRepository } from "./prisma-billing.repository.js";
+import { ReceiptController } from "./receipt.controller.js";
+import { ReceiptService } from "./receipt.service.js";
 
 @Module({
   imports: [AuditModule, DatabaseModule, RoomsModule, UtilitiesModule],
-  controllers: [BillingController],
+  controllers: [BillingController, ReceiptController],
   providers: [
     BillingService,
+    ReceiptService,
     {
       provide: BILLING_REPOSITORY,
       useClass:
@@ -22,5 +25,6 @@ import { PrismaBillingRepository } from "./prisma-billing.repository.js";
           : PrismaBillingRepository,
     },
   ],
+  exports: [BillingService, ReceiptService],
 })
 export class BillingModule {}
