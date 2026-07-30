@@ -51,6 +51,10 @@
 ## Debts and dashboard
 
 - Given phong co invoice qua han chua thanh toan du, when xem trang cong no, then phong hien tong no, loai no, hoa don cu nhat va so ngay qua han.
+- Given invoice con outstanding va due date da qua, when goi `GET /debts?status=OVERDUE`, then response gom cong no do voi `daysOverdue > 0`.
+- Given invoice da thu mot phan, when goi `GET /debts?status=PARTIALLY_PAID`, then response gom cong no do va invoice detail co payment allocation history.
+- Given nguoi dung thu nhanh tu man hinh cong no, when payment hop le duoc ghi nhan, then outstanding va debt summary giam ngay.
+- Given so tien thu nhanh lon hon outstanding, when submit payment, then API tra validation error va khong tao allocation.
 - Given dashboard duoc tai, when co phong chua ghi chi so thang hien tai, then canh bao phong chua ghi chi so duoc hien thi.
 
 ## Security and audit

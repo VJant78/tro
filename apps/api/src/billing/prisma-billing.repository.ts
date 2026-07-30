@@ -10,10 +10,10 @@ import type {
 } from "@prisma/client";
 import { PrismaService } from "../database/prisma.service.js";
 import { InvoiceNotFoundException } from "./billing.errors.js";
+import { buildDebtSummaries } from "./debt-summary.js";
 import type {
   BillingRepository,
   DebtListQuery,
-  DebtSummaryRecord,
   InvoiceCreateInput,
   InvoiceListQuery,
   InvoiceRecord,
@@ -27,7 +27,14 @@ type InvoiceWithRelations = Invoice & {
   room?: Pick<Room, "code">;
   payerTenant?: Pick<Tenant, "fullName"> | null;
   items?: InvoiceItem[];
-  paymentAllocations?: PaymentAllocation[];
+  paymentAllocations?: Array<
+    PaymentAllocation & {
+      payment?: Pick<
+        Payment,
+        "paymentNumber" | "method" | "status" | "paidAt"
+      > | null;
+    }
+  >;
 };
 
 type PaymentWithRelations = Payment & {
@@ -96,6 +103,10 @@ function mapInvoice(invoice: InvoiceWithRelations): InvoiceRecord {
         invoiceId: allocation.invoiceId,
         amount: allocation.amount.toString(),
         allocatedAt: allocation.allocatedAt.toISOString(),
+        paymentNumber: allocation.payment?.paymentNumber ?? null,
+        paymentMethod: allocation.payment?.method ?? null,
+        paymentStatus: allocation.payment?.status ?? null,
+        paidAt: allocation.payment?.paidAt.toISOString() ?? null,
         createdAt: allocation.createdAt.toISOString(),
         updatedAt: allocation.updatedAt.toISOString(),
       }),
@@ -127,6 +138,10 @@ function mapPayment(payment: PaymentWithRelations): PaymentRecord {
       invoiceId: allocation.invoiceId,
       amount: allocation.amount.toString(),
       allocatedAt: allocation.allocatedAt.toISOString(),
+      paymentNumber: payment.paymentNumber,
+      paymentMethod: payment.method,
+      paymentStatus: payment.status,
+      paidAt: payment.paidAt.toISOString(),
       createdAt: allocation.createdAt.toISOString(),
       updatedAt: allocation.updatedAt.toISOString(),
     })),
@@ -293,40 +308,7 @@ export class PrismaBillingRepository implements BillingRepository {
 
   async listDebts(query: DebtListQuery) {
     const invoices = await this.listInvoices({});
-    const debts = new Map<string, DebtSummaryRecord>();
-    for (const invoice of invoices) {
-      if (
-        invoice.status === "PAID" ||
-        invoice.status === "CANCELLED" ||
-        Number(invoice.outstandingAmount) <= 0 ||
-        (query.roomId && invoice.roomId !== query.roomId) ||
-        (query.payerTenantId && invoice.payerTenantId !== query.payerTenantId)
-      ) {
-        continue;
-      }
-      const key = `${invoice.roomId}:${invoice.payerTenantId ?? "unknown"}`;
-      const current =
-        debts.get(key) ??
-        ({
-          roomId: invoice.roomId,
-          roomCode: invoice.roomCode,
-          payerTenantId: invoice.payerTenantId,
-          payerTenantName: invoice.payerTenantName,
-          invoiceCount: 0,
-          totalOutstanding: "0",
-          invoices: [],
-        } satisfies DebtSummaryRecord);
-      current.invoiceCount += 1;
-      current.totalOutstanding = String(
-        Number(current.totalOutstanding) + Number(invoice.outstandingAmount),
-      );
-      current.invoices.push(invoice);
-      debts.set(key, current);
-    }
-    return [...debts.values()].sort(
-      (left, right) =>
-        Number(right.totalOutstanding) - Number(left.totalOutstanding),
-    );
+    return buildDebtSummaries(invoices, query);
   }
 }
 
@@ -335,7 +317,18 @@ function invoiceInclude() {
     room: { select: { code: true } },
     payerTenant: { select: { fullName: true } },
     items: true,
-    paymentAllocations: true,
+    paymentAllocations: {
+      include: {
+        payment: {
+          select: {
+            paymentNumber: true,
+            method: true,
+            status: true,
+            paidAt: true,
+          },
+        },
+      },
+    },
   } as const;
 }
 

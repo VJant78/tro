@@ -87,6 +87,7 @@
 - Can tach no tien phong, dien, nuoc va phi khac.
 - Muc canh bao toi thieu: sap den han, den han hom nay, qua han, qua han nghiem trong.
 - Phase 5 tong hop cong no theo phong va nguoi dai dien; detail nang cao theo tuoi no/loai phi o Phase 6.
+- Phase 6.1 cho phep loc cong no theo phong, nguoi dai dien va trang thai aging. Thanh toan nhanh tu man hinh cong no phai di qua payment API, van bi chan overpay va van ghi audit log.
 
 ## Audit log
 

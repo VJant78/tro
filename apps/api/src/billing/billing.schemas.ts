@@ -16,6 +16,12 @@ export const invoiceStatusSchema = z.enum([
   "CANCELLED",
 ]);
 export const paymentMethodSchema = z.enum(["CASH", "BANK_TRANSFER", "OTHER"]);
+export const debtStatusSchema = z.enum([
+  "OUTSTANDING",
+  "PARTIALLY_PAID",
+  "DUE_TODAY",
+  "OVERDUE",
+]);
 
 export const invoiceListQuerySchema = z
   .object({
@@ -51,6 +57,8 @@ export const debtListQuerySchema = z
   .object({
     roomId: uuidSchema.optional(),
     payerTenantId: uuidSchema.optional(),
+    status: debtStatusSchema.optional(),
+    asOf: z.iso.date().optional(),
   })
   .default({});
 

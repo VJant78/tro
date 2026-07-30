@@ -749,7 +749,7 @@ describe("API foundation", () => {
       .send({
         roomId: room.body.id,
         representativeTenantId: tenant.body.id,
-        startDate: "2026-09-01",
+        startDate: "2026-06-01",
         rentAmount: "3000000",
       })
       .expect(201);
@@ -760,7 +760,7 @@ describe("API foundation", () => {
         tenancyId: tenancy.body.id,
         settlementType: "MONTHLY",
         billingYear: 2026,
-        billingMonth: 9,
+        billingMonth: 6,
         utilityReading: {
           electricityPrevious: "0",
           electricityCurrent: "10",
@@ -821,18 +821,32 @@ describe("API foundation", () => {
       .get(`/api/v1/invoices/${invoice.body.id}`)
       .expect(200);
     expect(partiallyPaid.body.status).toBe("PARTIALLY_PAID");
+    expect(partiallyPaid.body.paymentAllocations[0].paymentNumber).toMatch(
+      /^PAY-/,
+    );
+    expect(partiallyPaid.body.paymentAllocations[0].paymentMethod).toBe("CASH");
     expect(partiallyPaid.body.outstandingAmount).toBe(
       String(Number(invoice.body.totalAmount) - 1000000),
     );
 
     await agent
-      .get(`/api/v1/debts?roomId=${room.body.id}`)
+      .get(`/api/v1/debts?roomId=${room.body.id}&status=OVERDUE`)
       .expect(200)
       .expect(({ body }) => {
         expect(body).toHaveLength(1);
+        expect(body[0].debtStatus).toBe("OVERDUE");
+        expect(body[0].daysOverdue).toBeGreaterThan(0);
+        expect(body[0].latestPaymentAt).toBeTruthy();
         expect(body[0].totalOutstanding).toBe(
           partiallyPaid.body.outstandingAmount,
         );
+      });
+
+    await agent
+      .get(`/api/v1/debts?roomId=${room.body.id}&status=PARTIALLY_PAID`)
+      .expect(200)
+      .expect(({ body }) => {
+        expect(body).toHaveLength(1);
       });
 
     await agent

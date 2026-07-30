@@ -14,6 +14,8 @@ export type InvoiceItemType =
   | "PREVIOUS_DEBT";
 export type PaymentMethod = "CASH" | "BANK_TRANSFER" | "OTHER";
 export type PaymentStatus = "PENDING" | "CONFIRMED" | "VOIDED" | "REFUNDED";
+export type DebtStatus =
+  "OUTSTANDING" | "PARTIALLY_PAID" | "DUE_TODAY" | "OVERDUE";
 
 export interface InvoiceItemRecord {
   id: string;
@@ -36,6 +38,10 @@ export interface PaymentAllocationRecord {
   invoiceId: string;
   amount: string;
   allocatedAt: string;
+  paymentNumber: string | null;
+  paymentMethod: PaymentMethod | null;
+  paymentStatus: PaymentStatus | null;
+  paidAt: string | null;
   createdAt: string;
   updatedAt: string;
 }
@@ -106,6 +112,8 @@ export interface PaymentListQuery {
 export interface DebtListQuery {
   roomId?: string;
   payerTenantId?: string;
+  status?: DebtStatus;
+  asOf?: string;
 }
 
 export interface DebtSummaryRecord {
@@ -113,8 +121,12 @@ export interface DebtSummaryRecord {
   roomCode: string | null;
   payerTenantId: string | null;
   payerTenantName: string | null;
+  debtStatus: DebtStatus;
   invoiceCount: number;
   totalOutstanding: string;
+  nearestDueOn: string | null;
+  daysOverdue: number;
+  latestPaymentAt: string | null;
   invoices: InvoiceRecord[];
 }
 

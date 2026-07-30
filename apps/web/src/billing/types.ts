@@ -1,6 +1,8 @@
 export type InvoiceStatus =
   "DRAFT" | "ISSUED" | "PARTIALLY_PAID" | "PAID" | "OVERDUE" | "CANCELLED";
 export type PaymentMethod = "CASH" | "BANK_TRANSFER" | "OTHER";
+export type DebtStatus =
+  "OUTSTANDING" | "PARTIALLY_PAID" | "DUE_TODAY" | "OVERDUE";
 
 export interface InvoiceItem {
   id: string;
@@ -12,6 +14,18 @@ export interface InvoiceItem {
   unitPrice: string;
   amount: string;
   sortOrder: number;
+}
+
+export interface PaymentAllocation {
+  id: string;
+  paymentId: string;
+  invoiceId: string;
+  amount: string;
+  allocatedAt: string;
+  paymentNumber: string | null;
+  paymentMethod: PaymentMethod | null;
+  paymentStatus: string | null;
+  paidAt: string | null;
 }
 
 export interface Invoice {
@@ -33,6 +47,7 @@ export interface Invoice {
   sourceKey: string | null;
   notes: string | null;
   items: InvoiceItem[];
+  paymentAllocations: PaymentAllocation[];
 }
 
 export interface Payment {
@@ -53,7 +68,11 @@ export interface DebtSummary {
   roomCode: string | null;
   payerTenantId: string | null;
   payerTenantName: string | null;
+  debtStatus: DebtStatus;
   invoiceCount: number;
   totalOutstanding: string;
+  nearestDueOn: string | null;
+  daysOverdue: number;
+  latestPaymentAt: string | null;
   invoices: Invoice[];
 }

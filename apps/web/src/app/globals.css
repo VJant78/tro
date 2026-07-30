@@ -227,6 +227,32 @@ a {
   padding: 14px;
 }
 
+.debts-toolbar {
+  grid-template-columns: minmax(0, 1fr) minmax(0, 1fr) 170px auto;
+}
+
+.debt-row-actions {
+  align-items: flex-end;
+  display: grid;
+  gap: 8px;
+  justify-items: end;
+}
+
+.invoice-select-row {
+  background: var(--surface);
+  color: inherit;
+  cursor: pointer;
+  font: inherit;
+  text-align: left;
+  width: 100%;
+}
+
+.invoice-select-row[data-active="true"],
+.invoice-select-row:hover {
+  border-color: var(--primary);
+  box-shadow: 0 0 0 2px #d5eee8;
+}
+
 .tenants-toolbar {
   grid-template-columns: minmax(0, 1fr) auto minmax(170px, 0.6fr) auto;
 }
@@ -591,6 +617,7 @@ a {
   .billing-layout,
   .debt-layout,
   .toolbar,
+  .debts-toolbar,
   .form-grid,
   .meter-grid,
   .settlement-grid,

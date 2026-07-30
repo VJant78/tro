@@ -1,10 +1,10 @@
 import { Injectable } from "@nestjs/common";
 import { randomUUID } from "node:crypto";
 import { InvoiceNotFoundException } from "./billing.errors.js";
+import { buildDebtSummaries } from "./debt-summary.js";
 import type {
   BillingRepository,
   DebtListQuery,
-  DebtSummaryRecord,
   InvoiceCreateInput,
   InvoiceListQuery,
   InvoiceRecord,
@@ -120,6 +120,10 @@ export class InMemoryBillingRepository implements BillingRepository {
       invoiceId: invoice.id,
       amount: input.amount,
       allocatedAt: input.paidAt,
+      paymentNumber: input.paymentNumber,
+      paymentMethod: input.method,
+      paymentStatus: "CONFIRMED" as const,
+      paidAt: input.paidAt,
       createdAt: now,
       updatedAt: now,
     };
@@ -157,37 +161,7 @@ export class InMemoryBillingRepository implements BillingRepository {
   }
 
   async listDebts(query: DebtListQuery) {
-    const debts = new Map<string, DebtSummaryRecord>();
     const invoices = await this.listInvoices({});
-    for (const invoice of invoices) {
-      if (
-        invoice.status === "PAID" ||
-        invoice.status === "CANCELLED" ||
-        Number(invoice.outstandingAmount) <= 0 ||
-        (query.roomId && invoice.roomId !== query.roomId) ||
-        (query.payerTenantId && invoice.payerTenantId !== query.payerTenantId)
-      ) {
-        continue;
-      }
-      const key = `${invoice.roomId}:${invoice.payerTenantId ?? "unknown"}`;
-      const current =
-        debts.get(key) ??
-        ({
-          roomId: invoice.roomId,
-          roomCode: invoice.roomCode,
-          payerTenantId: invoice.payerTenantId,
-          payerTenantName: invoice.payerTenantName,
-          invoiceCount: 0,
-          totalOutstanding: "0",
-          invoices: [],
-        } satisfies DebtSummaryRecord);
-      current.invoiceCount += 1;
-      current.totalOutstanding = String(
-        Number(current.totalOutstanding) + Number(invoice.outstandingAmount),
-      );
-      current.invoices.push(invoice);
-      debts.set(key, current);
-    }
-    return [...debts.values()];
+    return buildDebtSummaries(invoices, query);
   }
 }

@@ -5,8 +5,6 @@
 ## Backlog
 
 - [ ] P4-003 | Phase 4 | Monthly utility invoice job | Agent: Backend + Database + QA | Dependency: P4-002 | Scope: `apps/api/**`, `packages/database/**`, `tests/**` | AC: idempotent job, unique invoice source key, batch result | Verify: `npm run check`, cron integration tests | Risk: High
-- [ ] P6-001 | Phase 6 | Debt pages and APIs | Agent: Backend + Frontend + QA | Dependency: P5-002 | Scope: split by Lead before start | AC: debt list/detail filters and payment entry | Verify: `npm run check`, E2E | Risk: High
-- [ ] P6-002 | Phase 6 | Dashboard and reports | Agent: Backend + Frontend + QA | Dependency: P5-002, P6-001 | Scope: split by Lead before start | AC: KPI, alerts, CSV export | Verify: `npm run check`, report tests | Risk: Medium
 - [ ] P7-001 | Phase 7 | Production hardening | Agent: Security + DevOps + QA | Dependency: P2-P6 | Scope: `.github/**`, Docker, docs, tests | AC: security review, Docker, CI/CD, backup/restore runbook | Verify: CI, E2E, smoke tests | Risk: High
 
 ## Ready
@@ -15,7 +13,8 @@ Chua co.
 
 ## In Progress
 
-- Chua co. Lead duoc phep tu dong tiep tuc phase ke tiep theo yeu cau moi cua chu du an.
+- [ ] P6-002 | Phase 6.2 | Dashboard operational KPIs | Agent: Product/BA + UI/UX + Backend + Frontend + QA | Dependency: P6-001 | Scope: `apps/api/src/billing/**`, `apps/web/src/dashboard/**`, `apps/web/src/app.tsx`, docs/tests | AC: dashboard shows room occupancy, current-month collectable, collected, outstanding, overdue count, needs-attention list; metrics match invoices/payments/debts | Verify: focused API/web tests, `npm run check` | Risk: Medium
+- [ ] P6-003 | Phase 6.3 | Reports and CSV export | Agent: Product/BA + Backend + Frontend + QA + Security review | Dependency: P6-002 | Scope: `apps/api/src/billing/**`, `apps/web/src/reports/**`, `apps/web/src/app.tsx`, docs/tests | AC: monthly revenue/debt/utility/payment reports, filters, CSV export with safe cell encoding and auth enforcement | Verify: focused API/web tests, `npm run check`, CSV injection test | Risk: Medium
 
 ## Blocked
 
@@ -35,6 +34,7 @@ Chua co.
 
 ## Done
 
+- [x] P6-001 | Phase 6.1 | Debt detail filters and quick payment | Agent: Lead + Product/BA + UI/UX + Backend + Frontend + QA + Security review | Scope: `apps/api/src/billing/**`, `apps/web/src/debts/**`, `apps/web/src/billing/**`, docs/tests | AC: debt filters by room/tenant/status, detail shows invoice/payment history, quick payment reduces debt, overdue aging shown, overpay blocked | Verify: focused API/web tests, `npm run check`, security self-review | Risk: High
 - [x] P5-004 | Phase 5 | Debt foundation | Agent: Lead + Backend + Frontend + QA | Scope: `apps/api/src/billing/**`, `apps/web/src/debts/**`, docs/tests | AC: unpaid invoices exposed as debt summary, filters by room/tenant, payment reduces debt immediately | Verify: `npm run check`, `npm run build`, `npm run test:e2e`, `npm run audit`, PostgreSQL billing smoke passed and smoke data cleaned | Risk: High
 - [x] P5-003 | Phase 5 | PaymentPeriodCalculator implementation | Agent: Lead + Backend + QA | Scope: `apps/api/src/billing/**`, tests/docs | AC: daily/weekly/monthly anchor cases pass, leap year handled, partial payment does not advance paidUntil at service boundary | Verify: `npm run check`, calculator unit tests | Risk: Critical
 - [x] P5-002 | Phase 5 | Payment + allocation + idempotency | Agent: Lead + Backend + Database + QA + Security | Scope: `apps/api/src/billing/**`, `apps/web/src/invoices/**`, docs/tests | AC: payment record, allocation to invoice, partial/full status update, duplicate idempotency key returns existing payment, overpay rejected, transaction rollback | Verify: `npm run check`, API integration tests, PostgreSQL billing smoke passed | Risk: Critical
