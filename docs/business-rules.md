@@ -89,6 +89,14 @@
 - Phase 5 tong hop cong no theo phong va nguoi dai dien; detail nang cao theo tuoi no/loai phi o Phase 6.
 - Phase 6.1 cho phep loc cong no theo phong, nguoi dai dien va trang thai aging. Thanh toan nhanh tu man hinh cong no phai di qua payment API, van bi chan overpay va van ghi audit log.
 
+## Dashboard
+
+- Dashboard la tong quan van hanh theo thang cua ngay `asOf`.
+- `Can thu thang nay` lay tu tong invoice khong bi huy co `billingYear/billingMonth` trung thang hien tai.
+- `Da thu thang nay` lay tu payment `CONFIRMED` co ngay thu trong thang hien tai.
+- `Con thu thang nay` lay tu outstanding cua invoice trong thang hien tai.
+- Danh sach can chu y uu tien cong no qua han, sap xep theo so ngay qua han va so tien con thu.
+
 ## Audit log
 
 - Bat buoc log: phong, nguoi thue, chuyen phong, doi gia, chi so, invoice, payment, huy payment, dieu chinh no, cau hinh.

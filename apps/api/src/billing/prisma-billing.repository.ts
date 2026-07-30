@@ -160,6 +160,8 @@ export class PrismaBillingRepository implements BillingRepository {
         tenancyId: query.tenancyId,
         payerTenantId: query.payerTenantId,
         status: query.status,
+        billingYear: query.billingYear,
+        billingMonth: query.billingMonth,
       },
       include: invoiceInclude(),
       orderBy: { createdAt: "desc" },
@@ -235,6 +237,17 @@ export class PrismaBillingRepository implements BillingRepository {
         allocations: query.invoiceId
           ? { some: { invoiceId: query.invoiceId, deletedAt: null } }
           : undefined,
+        paidAt:
+          query.paidFrom || query.paidTo
+            ? {
+                gte: query.paidFrom
+                  ? new Date(`${query.paidFrom}T00:00:00.000Z`)
+                  : undefined,
+                lte: query.paidTo
+                  ? new Date(`${query.paidTo}T23:59:59.999Z`)
+                  : undefined,
+              }
+            : undefined,
       },
       include: paymentInclude(),
       orderBy: { paidAt: "desc" },

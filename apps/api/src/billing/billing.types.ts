@@ -101,12 +101,16 @@ export interface InvoiceListQuery {
   tenancyId?: string;
   payerTenantId?: string;
   status?: InvoiceStatus;
+  billingYear?: number;
+  billingMonth?: number;
 }
 
 export interface PaymentListQuery {
   invoiceId?: string;
   roomId?: string;
   payerTenantId?: string;
+  paidFrom?: string;
+  paidTo?: string;
 }
 
 export interface DebtListQuery {
@@ -189,4 +193,29 @@ export interface BillingRepository {
   ): Promise<PaymentRecord | null>;
   createPayment(input: PaymentCreateInput): Promise<PaymentCreateResult>;
   listDebts(query: DebtListQuery): Promise<DebtSummaryRecord[]>;
+}
+
+export interface DashboardSummaryRecord {
+  asOf: string;
+  billingYear: number;
+  billingMonth: number;
+  totals: {
+    rooms: number;
+    occupiedRooms: number;
+    currentMonthCollectable: string;
+    currentMonthCollected: string;
+    currentMonthOutstanding: string;
+    overdueInvoiceCount: number;
+    overdueAmount: string;
+  };
+  needsAttention: Array<{
+    kind: "OVERDUE_DEBT";
+    roomId: string;
+    roomCode: string | null;
+    payerTenantId: string | null;
+    payerTenantName: string | null;
+    totalOutstanding: string;
+    daysOverdue: number;
+    nearestDueOn: string | null;
+  }>;
 }

@@ -29,6 +29,8 @@ export const invoiceListQuerySchema = z
     tenancyId: uuidSchema.optional(),
     payerTenantId: uuidSchema.optional(),
     status: invoiceStatusSchema.optional(),
+    billingYear: z.coerce.number().int().min(2000).max(2100).optional(),
+    billingMonth: z.coerce.number().int().min(1).max(12).optional(),
   })
   .default({});
 
@@ -50,6 +52,8 @@ export const paymentListQuerySchema = z
     invoiceId: uuidSchema.optional(),
     roomId: uuidSchema.optional(),
     payerTenantId: uuidSchema.optional(),
+    paidFrom: z.iso.date().optional(),
+    paidTo: z.iso.date().optional(),
   })
   .default({});
 
@@ -63,3 +67,9 @@ export const debtListQuerySchema = z
   .default({});
 
 export const idParamSchema = z.object({ id: uuidSchema });
+
+export const dashboardSummaryQuerySchema = z
+  .object({
+    asOf: z.iso.date().optional(),
+  })
+  .default({});

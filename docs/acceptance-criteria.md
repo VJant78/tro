@@ -56,6 +56,8 @@
 - Given nguoi dung thu nhanh tu man hinh cong no, when payment hop le duoc ghi nhan, then outstanding va debt summary giam ngay.
 - Given so tien thu nhanh lon hon outstanding, when submit payment, then API tra validation error va khong tao allocation.
 - Given dashboard duoc tai, when co phong chua ghi chi so thang hien tai, then canh bao phong chua ghi chi so duoc hien thi.
+- Given dashboard duoc tai voi `asOf` trong thang hien tai, when co invoice/payment/debt, then KPI can thu, da thu, con thu va qua han khop voi invoice/payment/debt API.
+- Given co cong no qua han, when xem dashboard, then danh sach can chu y hien phong, nguoi dai dien, so tien va so ngay qua han.
 
 ## Security and audit
 

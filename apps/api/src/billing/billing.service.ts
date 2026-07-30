@@ -13,6 +13,7 @@ import { BILLING_REPOSITORY } from "./billing.tokens.js";
 import type {
   BillingRepository,
   DebtListQuery,
+  DashboardSummaryRecord,
   InvoiceCreateInput,
   InvoiceListQuery,
   PaymentCreateInput,
@@ -147,6 +148,63 @@ export class BillingService {
   listDebts(query: DebtListQuery) {
     return this.billing.listDebts(query);
   }
+
+  async dashboardSummary(query: { asOf?: string }) {
+    const asOf = query.asOf ?? todayDate();
+    const { year, month } = yearMonthFor(asOf);
+    const monthStart = `${year}-${String(month).padStart(2, "0")}-01`;
+    const monthEnd = `${year}-${String(month).padStart(2, "0")}-${String(
+      daysInMonthFor(year, month),
+    ).padStart(2, "0")}`;
+    const [rooms, invoices, payments, overdueDebts] = await Promise.all([
+      this.rooms.list({ limit: 100, sort: "code:asc" }),
+      this.billing.listInvoices({ billingYear: year, billingMonth: month }),
+      this.billing.listPayments({ paidFrom: monthStart, paidTo: monthEnd }),
+      this.billing.listDebts({ status: "OVERDUE", asOf }),
+    ]);
+    const activeInvoices = invoices.filter(
+      (invoice) => invoice.status !== "CANCELLED",
+    );
+    const summary: DashboardSummaryRecord = {
+      asOf,
+      billingYear: year,
+      billingMonth: month,
+      totals: {
+        rooms: rooms.data.length,
+        occupiedRooms: rooms.data.filter((room) => room.currentOccupancy)
+          .length,
+        currentMonthCollectable: sumMoney(
+          activeInvoices.map((invoice) => invoice.totalAmount),
+        ),
+        currentMonthCollected: sumMoney(
+          payments
+            .filter((payment) => payment.status === "CONFIRMED")
+            .map((payment) => payment.amount),
+        ),
+        currentMonthOutstanding: sumMoney(
+          activeInvoices.map((invoice) => invoice.outstandingAmount),
+        ),
+        overdueInvoiceCount: overdueDebts.reduce(
+          (total, debt) => total + debt.invoiceCount,
+          0,
+        ),
+        overdueAmount: sumMoney(
+          overdueDebts.map((debt) => debt.totalOutstanding),
+        ),
+      },
+      needsAttention: overdueDebts.slice(0, 8).map((debt) => ({
+        kind: "OVERDUE_DEBT",
+        roomId: debt.roomId,
+        roomCode: debt.roomCode,
+        payerTenantId: debt.payerTenantId,
+        payerTenantName: debt.payerTenantName,
+        totalOutstanding: debt.totalOutstanding,
+        daysOverdue: debt.daysOverdue,
+        nearestDueOn: debt.nearestDueOn,
+      })),
+    };
+    return summary;
+  }
 }
 
 function invoiceItemsForSettlement(settlement: {
@@ -219,6 +277,22 @@ function dueDateFor(periodEnd: string) {
 
 function todayDate() {
   return new Date().toISOString().slice(0, 10);
+}
+
+function yearMonthFor(value: string) {
+  const [yearText, monthText] = value.split("-");
+  return {
+    year: Number(yearText),
+    month: Number(monthText),
+  };
+}
+
+function daysInMonthFor(year: number, month: number) {
+  return new Date(Date.UTC(year, month, 0)).getUTCDate();
+}
+
+function sumMoney(values: string[]) {
+  return String(values.reduce((total, value) => total + Number(value), 0));
 }
 
 function invoiceNumberFor(periodEnd: string) {

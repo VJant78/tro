@@ -16,6 +16,7 @@ import { BillingService } from "./billing.service.js";
 import {
   debtListQuerySchema,
   fromSettlementSchema,
+  dashboardSummaryQuerySchema,
   idParamSchema,
   invoiceListQuerySchema,
   paymentCreateSchema,
@@ -90,5 +91,12 @@ export class BillingController {
   @Get("debts")
   listDebts(@Query() query: unknown) {
     return this.billing.listDebts(parseRequest(debtListQuerySchema, query));
+  }
+
+  @Get("dashboard/summary")
+  dashboardSummary(@Query() query: unknown) {
+    return this.billing.dashboardSummary(
+      parseRequest(dashboardSummaryQuerySchema, query),
+    );
   }
 }

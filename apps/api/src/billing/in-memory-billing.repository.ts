@@ -30,6 +30,14 @@ export class InMemoryBillingRepository implements BillingRepository {
           !query.payerTenantId || invoice.payerTenantId === query.payerTenantId,
       )
       .filter((invoice) => !query.status || invoice.status === query.status)
+      .filter(
+        (invoice) =>
+          !query.billingYear || invoice.billingYear === query.billingYear,
+      )
+      .filter(
+        (invoice) =>
+          !query.billingMonth || invoice.billingMonth === query.billingMonth,
+      )
       .sort((left, right) => right.createdAt.localeCompare(left.createdAt));
   }
 
@@ -92,6 +100,14 @@ export class InMemoryBillingRepository implements BillingRepository {
           payment.allocations.some(
             (allocation) => allocation.invoiceId === query.invoiceId,
           ),
+      )
+      .filter(
+        (payment) =>
+          !query.paidFrom || payment.paidAt.slice(0, 10) >= query.paidFrom,
+      )
+      .filter(
+        (payment) =>
+          !query.paidTo || payment.paidAt.slice(0, 10) <= query.paidTo,
       )
       .sort((left, right) => right.paidAt.localeCompare(left.paidAt));
   }

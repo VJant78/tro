@@ -76,3 +76,28 @@ export interface DebtSummary {
   latestPaymentAt: string | null;
   invoices: Invoice[];
 }
+
+export interface DashboardSummary {
+  asOf: string;
+  billingYear: number;
+  billingMonth: number;
+  totals: {
+    rooms: number;
+    occupiedRooms: number;
+    currentMonthCollectable: string;
+    currentMonthCollected: string;
+    currentMonthOutstanding: string;
+    overdueInvoiceCount: number;
+    overdueAmount: string;
+  };
+  needsAttention: Array<{
+    kind: "OVERDUE_DEBT";
+    roomId: string;
+    roomCode: string | null;
+    payerTenantId: string | null;
+    payerTenantName: string | null;
+    totalOutstanding: string;
+    daysOverdue: number;
+    nearestDueOn: string | null;
+  }>;
+}

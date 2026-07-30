@@ -4,6 +4,26 @@ import { App } from "./app";
 
 describe("App", () => {
   it("renders the dashboard shell", () => {
+    vi.spyOn(globalThis, "fetch").mockResolvedValue(
+      new Response(
+        JSON.stringify({
+          asOf: "2026-07-30",
+          billingYear: 2026,
+          billingMonth: 7,
+          totals: {
+            rooms: 0,
+            occupiedRooms: 0,
+            currentMonthCollectable: "0",
+            currentMonthCollected: "0",
+            currentMonthOutstanding: "0",
+            overdueInvoiceCount: 0,
+            overdueAmount: "0",
+          },
+          needsAttention: [],
+        }),
+        { status: 200, headers: { "Content-Type": "application/json" } },
+      ),
+    );
     window.history.pushState({}, "", "/");
     render(<App />);
 
@@ -11,6 +31,7 @@ describe("App", () => {
       screen.getByRole("heading", { name: "Dashboard" }),
     ).toBeInTheDocument();
     expect(screen.getByText("Tro Manager")).toBeInTheDocument();
+    vi.restoreAllMocks();
   });
 
   it("routes to the rooms module shell", async () => {

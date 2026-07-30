@@ -82,6 +82,7 @@
 - `POST /api/v1/payments`: owner/manager/staff create one confirmed payment for one invoice. `Idempotency-Key` header or `idempotencyKey` body prevents duplicate writes.
 - Payment creation runs in a database transaction: create payment, create allocation, update invoice `paidAmount`, `outstandingAmount` and status. Overpayment is rejected while MVP does not support advance payment outside settlement credit.
 - `GET /api/v1/debts`: protected debt summary grouped by room and payer tenant from invoices that still have outstanding amount. Supports `roomId`, `payerTenantId`, `status=OUTSTANDING|PARTIALLY_PAID|DUE_TODAY|OVERDUE`, and optional `asOf` for deterministic aging. Response includes invoice detail, payment allocation history, nearest due date, overdue days and latest payment timestamp.
+- `GET /api/v1/dashboard/summary`: protected operational summary. Supports optional `asOf` date. Returns room count, occupied room count, current-month collectable/collected/outstanding amounts, overdue invoice count/amount and an attention list built from overdue debts.
 
 ## Validation
 

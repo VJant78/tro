@@ -850,6 +850,17 @@ describe("API foundation", () => {
       });
 
     await agent
+      .get("/api/v1/dashboard/summary?asOf=2026-07-30")
+      .expect(200)
+      .expect(({ body }) => {
+        expect(body.billingYear).toBe(2026);
+        expect(body.billingMonth).toBe(7);
+        expect(body.totals.currentMonthCollected).toBe("1000000");
+        expect(body.totals.overdueInvoiceCount).toBe(1);
+        expect(body.needsAttention[0].kind).toBe("OVERDUE_DEBT");
+      });
+
+    await agent
       .post("/api/v1/payments")
       .send({
         invoiceId: invoice.body.id,
