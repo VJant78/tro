@@ -58,6 +58,9 @@
 - Given dashboard duoc tai, when co phong chua ghi chi so thang hien tai, then canh bao phong chua ghi chi so duoc hien thi.
 - Given dashboard duoc tai voi `asOf` trong thang hien tai, when co invoice/payment/debt, then KPI can thu, da thu, con thu va qua han khop voi invoice/payment/debt API.
 - Given co cong no qua han, when xem dashboard, then danh sach can chu y hien phong, nguoi dai dien, so tien va so ngay qua han.
+- Given nguoi dung xem bao cao thang, when chon nam/thang, then report hien tong hoa don, da thu, con thu, qua han, tien dien va tien nuoc dung theo invoice/payment trong ky.
+- Given nguoi dung tai CSV, when export thanh cong, then file CSV dung filter hien tai va gom dong hoa don/thanh toan.
+- Given cell CSV bat dau bang `=`, `+`, `-` hoac `@`, when export, then cell duoc encode an toan de tranh formula injection.
 
 ## Security and audit
 

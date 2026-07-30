@@ -156,6 +156,12 @@ a {
   grid-template-columns: minmax(0, 1fr);
 }
 
+.reports-layout {
+  display: grid;
+  gap: 20px;
+  grid-template-columns: minmax(0, 1fr);
+}
+
 .pricing-stack {
   display: grid;
   gap: 12px;
@@ -251,6 +257,41 @@ a {
 .invoice-select-row:hover {
   border-color: var(--primary);
   box-shadow: 0 0 0 2px #d5eee8;
+}
+
+.report-toolbar {
+  align-items: end;
+  grid-template-columns: 160px 160px auto;
+}
+
+.report-actions {
+  display: flex;
+  gap: 10px;
+}
+
+.report-table {
+  display: grid;
+  gap: 8px;
+  margin-top: 12px;
+}
+
+.report-table-head,
+.report-table-row {
+  display: grid;
+  gap: 12px;
+  grid-template-columns: 1.2fr 0.8fr 0.8fr 0.8fr;
+}
+
+.report-table-head {
+  color: var(--muted);
+  font-size: 13px;
+  font-weight: 700;
+}
+
+.report-table-row {
+  border: 1px solid var(--border);
+  border-radius: 8px;
+  padding: 10px 12px;
 }
 
 .tenants-toolbar {
@@ -616,8 +657,12 @@ a {
   .utilities-layout,
   .billing-layout,
   .debt-layout,
+  .reports-layout,
   .toolbar,
   .debts-toolbar,
+  .report-toolbar,
+  .report-table-head,
+  .report-table-row,
   .form-grid,
   .meter-grid,
   .settlement-grid,

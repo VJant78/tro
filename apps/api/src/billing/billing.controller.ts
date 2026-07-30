@@ -3,6 +3,7 @@ import {
   Controller,
   Get,
   Headers,
+  Header,
   Inject,
   Param,
   Post,
@@ -19,6 +20,7 @@ import {
   dashboardSummaryQuerySchema,
   idParamSchema,
   invoiceListQuerySchema,
+  monthlyReportQuerySchema,
   paymentCreateSchema,
   paymentListQuerySchema,
 } from "./billing.schemas.js";
@@ -97,6 +99,21 @@ export class BillingController {
   dashboardSummary(@Query() query: unknown) {
     return this.billing.dashboardSummary(
       parseRequest(dashboardSummaryQuerySchema, query),
+    );
+  }
+
+  @Get("reports/monthly")
+  monthlyReport(@Query() query: unknown) {
+    return this.billing.monthlyReport(
+      parseRequest(monthlyReportQuerySchema, query),
+    );
+  }
+
+  @Header("Content-Type", "text/csv; charset=utf-8")
+  @Get("reports/monthly.csv")
+  async monthlyReportCsv(@Query() query: unknown) {
+    return this.billing.monthlyReportCsv(
+      parseRequest(monthlyReportQuerySchema, query),
     );
   }
 }

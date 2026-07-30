@@ -73,3 +73,8 @@ export const dashboardSummaryQuerySchema = z
     asOf: z.iso.date().optional(),
   })
   .default({});
+
+export const monthlyReportQuerySchema = z.object({
+  billingYear: z.coerce.number().int().min(2000).max(2100),
+  billingMonth: z.coerce.number().int().min(1).max(12),
+});

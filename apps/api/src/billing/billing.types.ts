@@ -219,3 +219,21 @@ export interface DashboardSummaryRecord {
     nearestDueOn: string | null;
   }>;
 }
+
+export interface MonthlyReportRecord {
+  billingYear: number;
+  billingMonth: number;
+  periodStart: string;
+  periodEnd: string;
+  totals: {
+    invoiceTotal: string;
+    collected: string;
+    outstanding: string;
+    overdue: string;
+    electricity: string;
+    water: string;
+  };
+  invoices: InvoiceRecord[];
+  payments: PaymentRecord[];
+  debts: DebtSummaryRecord[];
+}

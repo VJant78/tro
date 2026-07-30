@@ -861,6 +861,30 @@ describe("API foundation", () => {
       });
 
     await agent
+      .get("/api/v1/reports/monthly?billingYear=2026&billingMonth=6")
+      .expect(200)
+      .expect(({ body }) => {
+        expect(body.periodStart).toBe("2026-06-01");
+        expect(body.periodEnd).toBe("2026-06-30");
+        expect(body.totals.invoiceTotal).toBe(invoice.body.totalAmount);
+        expect(body.totals.overdue).toBe("0");
+        expect(body.totals.electricity).toBe("35000");
+        expect(body.totals.water).toBe("30000");
+        expect(body.invoices).toHaveLength(1);
+        expect(body.debts).toHaveLength(1);
+      });
+
+    await agent
+      .get("/api/v1/reports/monthly.csv?billingYear=2026&billingMonth=6")
+      .expect(200)
+      .expect("Content-Type", /text\/csv/)
+      .expect(({ text }) => {
+        expect(text).toContain("Hoa don");
+        expect(text).toContain("Cong no");
+        expect(text).toContain(invoice.body.invoiceNumber);
+      });
+
+    await agent
       .post("/api/v1/payments")
       .send({
         invoiceId: invoice.body.id,

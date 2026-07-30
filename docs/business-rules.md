@@ -97,6 +97,13 @@
 - `Con thu thang nay` lay tu outstanding cua invoice trong thang hien tai.
 - Danh sach can chu y uu tien cong no qua han, sap xep theo so ngay qua han va so tien con thu.
 
+## Bao cao
+
+- Bao cao thang gom invoice phat sinh theo `billingYear/billingMonth` va payment co ngay thu nam trong thang do.
+- Tong dien/nuoc trong bao cao lay tu invoice item da phat hanh, khong tinh truc tiep lai tu reading de tranh lech so lieu sau khi hoa don da tao.
+- CSV export phai dung cung filter voi man hinh bao cao.
+- CSV export phai encode cell de giam rui ro spreadsheet formula injection.
+
 ## Audit log
 
 - Bat buoc log: phong, nguoi thue, chuyen phong, doi gia, chi so, invoice, payment, huy payment, dieu chinh no, cau hinh.

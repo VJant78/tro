@@ -13,7 +13,7 @@ Chua co.
 
 ## In Progress
 
-- [ ] P6-003 | Phase 6.3 | Reports and CSV export | Agent: Product/BA + Backend + Frontend + QA + Security review | Dependency: P6-002 | Scope: `apps/api/src/billing/**`, `apps/web/src/reports/**`, `apps/web/src/app.tsx`, docs/tests | AC: monthly revenue/debt/utility/payment reports, filters, CSV export with safe cell encoding and auth enforcement | Verify: focused API/web tests, `npm run check`, CSV injection test | Risk: Medium
+Chua co.
 
 ## Blocked
 
@@ -33,6 +33,7 @@ Chua co.
 
 ## Done
 
+- [x] P6-003 | Phase 6.3 | Reports and CSV export | Agent: Lead + Product/BA + Backend + Frontend + QA + Security review | Scope: `apps/api/src/billing/**`, `apps/web/src/reports/**`, `apps/web/src/app.tsx`, docs/tests | AC: monthly revenue/debt/utility/payment reports, filters, CSV export with safe cell encoding and auth enforcement | Verify: focused API/web tests, `npm run check`, `npm run build`, `npm run test:e2e`, `npm run audit`, CSV injection test | Risk: Medium
 - [x] P6-002 | Phase 6.2 | Dashboard operational KPIs | Agent: Lead + Product/BA + UI/UX + Backend + Frontend + QA | Scope: `apps/api/src/billing/**`, `apps/web/src/dashboard/**`, `apps/web/src/app.tsx`, docs/tests | AC: dashboard shows room occupancy, current-month collectable, collected, outstanding, overdue count, needs-attention list; metrics match invoices/payments/debts | Verify: focused API/web tests, `npm run check` | Risk: Medium
 - [x] P6-001 | Phase 6.1 | Debt detail filters and quick payment | Agent: Lead + Product/BA + UI/UX + Backend + Frontend + QA + Security review | Scope: `apps/api/src/billing/**`, `apps/web/src/debts/**`, `apps/web/src/billing/**`, docs/tests | AC: debt filters by room/tenant/status, detail shows invoice/payment history, quick payment reduces debt, overdue aging shown, overpay blocked | Verify: focused API/web tests, `npm run check`, security self-review | Risk: High
 - [x] P5-004 | Phase 5 | Debt foundation | Agent: Lead + Backend + Frontend + QA | Scope: `apps/api/src/billing/**`, `apps/web/src/debts/**`, docs/tests | AC: unpaid invoices exposed as debt summary, filters by room/tenant, payment reduces debt immediately | Verify: `npm run check`, `npm run build`, `npm run test:e2e`, `npm run audit`, PostgreSQL billing smoke passed and smoke data cleaned | Risk: High

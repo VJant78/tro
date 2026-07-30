@@ -4,6 +4,7 @@ import { DashboardPage } from "./dashboard/dashboard-page";
 import { DebtsPage } from "./debts/debts-page";
 import { InvoicesPage } from "./invoices/invoices-page";
 import { PricingPage } from "./pricing/pricing-page";
+import { ReportsPage } from "./reports/reports-page";
 import { RoomsPage } from "./rooms/rooms-page";
 import { TenantsPage } from "./tenants/tenants-page";
 import { UtilitiesPage } from "./utilities/utilities-page";
@@ -34,6 +35,8 @@ export function App() {
         <DebtsPage />
       ) : path === "/settings" ? (
         <PricingPage />
+      ) : path === "/reports" ? (
+        <ReportsPage />
       ) : (
         <DashboardPage />
       )}

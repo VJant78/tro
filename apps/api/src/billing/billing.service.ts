@@ -10,12 +10,15 @@ import {
   SettlementInvoiceNotFoundException,
 } from "./billing.errors.js";
 import { BILLING_REPOSITORY } from "./billing.tokens.js";
+import { buildDebtSummaries } from "./debt-summary.js";
+import { monthlyReportToCsv } from "./reports-csv.js";
 import type {
   BillingRepository,
   DebtListQuery,
   DashboardSummaryRecord,
   InvoiceCreateInput,
   InvoiceListQuery,
+  MonthlyReportRecord,
   PaymentCreateInput,
   PaymentListQuery,
 } from "./billing.types.js";
@@ -204,6 +207,73 @@ export class BillingService {
       })),
     };
     return summary;
+  }
+
+  async monthlyReport(query: {
+    billingYear: number;
+    billingMonth: number;
+  }): Promise<MonthlyReportRecord> {
+    const periodStart = `${query.billingYear}-${String(
+      query.billingMonth,
+    ).padStart(2, "0")}-01`;
+    const periodEnd = `${query.billingYear}-${String(
+      query.billingMonth,
+    ).padStart(2, "0")}-${String(
+      daysInMonthFor(query.billingYear, query.billingMonth),
+    ).padStart(2, "0")}`;
+    const [invoices, payments] = await Promise.all([
+      this.billing.listInvoices({
+        billingYear: query.billingYear,
+        billingMonth: query.billingMonth,
+      }),
+      this.billing.listPayments({ paidFrom: periodStart, paidTo: periodEnd }),
+    ]);
+    const activeInvoices = invoices.filter(
+      (invoice) => invoice.status !== "CANCELLED",
+    );
+    const debts = buildDebtSummaries(activeInvoices, { asOf: periodEnd });
+    const overdueDebts = debts.filter((debt) => debt.debtStatus === "OVERDUE");
+    return {
+      billingYear: query.billingYear,
+      billingMonth: query.billingMonth,
+      periodStart,
+      periodEnd,
+      totals: {
+        invoiceTotal: sumMoney(
+          activeInvoices.map((invoice) => invoice.totalAmount),
+        ),
+        collected: sumMoney(
+          payments
+            .filter((payment) => payment.status === "CONFIRMED")
+            .map((payment) => payment.amount),
+        ),
+        outstanding: sumMoney(
+          activeInvoices.map((invoice) => invoice.outstandingAmount),
+        ),
+        overdue: sumMoney(overdueDebts.map((debt) => debt.totalOutstanding)),
+        electricity: sumMoney(
+          activeInvoices.flatMap((invoice) =>
+            invoice.items
+              .filter((item) => item.itemType === "ELECTRICITY")
+              .map((item) => item.amount),
+          ),
+        ),
+        water: sumMoney(
+          activeInvoices.flatMap((invoice) =>
+            invoice.items
+              .filter((item) => item.itemType === "WATER")
+              .map((item) => item.amount),
+          ),
+        ),
+      },
+      invoices: activeInvoices,
+      payments: payments.filter((payment) => payment.status === "CONFIRMED"),
+      debts,
+    };
+  }
+
+  async monthlyReportCsv(query: { billingYear: number; billingMonth: number }) {
+    return monthlyReportToCsv(await this.monthlyReport(query));
   }
 }
 

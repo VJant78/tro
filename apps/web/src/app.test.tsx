@@ -140,4 +140,37 @@ describe("App", () => {
     ).toBeInTheDocument();
     vi.restoreAllMocks();
   });
+
+  it("routes to reports", async () => {
+    vi.spyOn(globalThis, "fetch").mockResolvedValue(
+      new Response(
+        JSON.stringify({
+          billingYear: 2026,
+          billingMonth: 7,
+          periodStart: "2026-07-01",
+          periodEnd: "2026-07-31",
+          totals: {
+            invoiceTotal: "0",
+            collected: "0",
+            outstanding: "0",
+            overdue: "0",
+            electricity: "0",
+            water: "0",
+          },
+          invoices: [],
+          payments: [],
+          debts: [],
+        }),
+        { status: 200, headers: { "Content-Type": "application/json" } },
+      ),
+    );
+
+    window.history.pushState({}, "", "/reports");
+    render(<App />);
+
+    expect(
+      await screen.findByRole("heading", { name: "Bao cao" }),
+    ).toBeInTheDocument();
+    vi.restoreAllMocks();
+  });
 });

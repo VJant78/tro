@@ -83,6 +83,8 @@
 - Payment creation runs in a database transaction: create payment, create allocation, update invoice `paidAmount`, `outstandingAmount` and status. Overpayment is rejected while MVP does not support advance payment outside settlement credit.
 - `GET /api/v1/debts`: protected debt summary grouped by room and payer tenant from invoices that still have outstanding amount. Supports `roomId`, `payerTenantId`, `status=OUTSTANDING|PARTIALLY_PAID|DUE_TODAY|OVERDUE`, and optional `asOf` for deterministic aging. Response includes invoice detail, payment allocation history, nearest due date, overdue days and latest payment timestamp.
 - `GET /api/v1/dashboard/summary`: protected operational summary. Supports optional `asOf` date. Returns room count, occupied room count, current-month collectable/collected/outstanding amounts, overdue invoice count/amount and an attention list built from overdue debts.
+- `GET /api/v1/reports/monthly?billingYear=&billingMonth=`: protected monthly report including invoice totals, collected payments in the month, outstanding amount, overdue amount, electricity/water totals, invoice rows, payment rows and debt rows.
+- `GET /api/v1/reports/monthly.csv?billingYear=&billingMonth=`: protected CSV export for the same report. CSV cells are quoted and formula-like cells starting with `=`, `+`, `-` or `@` are prefixed to reduce spreadsheet formula injection risk.
 
 ## Validation
 

@@ -101,3 +101,21 @@ export interface DashboardSummary {
     nearestDueOn: string | null;
   }>;
 }
+
+export interface MonthlyReport {
+  billingYear: number;
+  billingMonth: number;
+  periodStart: string;
+  periodEnd: string;
+  totals: {
+    invoiceTotal: string;
+    collected: string;
+    outstanding: string;
+    overdue: string;
+    electricity: string;
+    water: string;
+  };
+  invoices: Invoice[];
+  payments: Payment[];
+  debts: DebtSummary[];
+}
